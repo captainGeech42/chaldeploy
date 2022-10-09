@@ -1,3 +1,3 @@
 module github.com/captainGeech42/chaldeploy
 
-go 1.17
+go 1.19
