@@ -9,14 +9,12 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("app good to go"))
 }
 
-// basic logging middleware
-// based on the gorilla/mux docs
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// don't log healthcheck b/c i don't care
-		// if r.RequestURI == "/healthcheck" {
-		// 	return
-		// }
+		if r.RequestURI == "/healthcheck" {
+			return
+		}
 
 		log.Printf("request from %s to %s\n", r.RemoteAddr, r.RequestURI)
 

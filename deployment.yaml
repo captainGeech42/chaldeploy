@@ -1,0 +1,40 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chaldeploy
+  labels:
+    app: chaldeploy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chaldeploy
+  template:
+    metadata:
+      labels:
+        app: chaldeploy
+    spec:
+      containers:
+      - name: chaldeploy
+        image: chaldeploy:v1
+        ports:
+        - containerPort: 5050
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+        imagePullPolicy: Never
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chaldeploy
+spec:
+  ports:
+  - port: 5050
+    targetPort: 5050
+    protocol: TCP
+  selector:
+    app: chaldeploy
+  type: NodePort 
