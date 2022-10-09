@@ -21,3 +21,13 @@ docker build -t chaldeploy:v1 .
 minikube image load chaldeploy:v1
 kubectl apply -f deployment.yaml
 ```
+
+## target app
+
+[src](https://gitlab.com/osusec/ctf-authors/damctf2020-chals/-/tree/master/test/test-nc)
+
+```
+docker build -t test-nc:v2
+minikube image load test-nc:v2
+kubectl apply -f target-app.yaml
+```

@@ -23,6 +23,8 @@ func loggingMiddleware(next http.Handler) http.Handler {
 }
 
 func main() {
+	getDeployment()
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/healthcheck", healthCheck)
