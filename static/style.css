@@ -13,3 +13,15 @@ div.col-no-gutters {
     padding-left: 0;
     padding-right: 0;
 }
+
+span.status-info {
+    color: black;
+}
+
+span.status-error {
+    color: red;
+}
+
+span.status-success {
+    color: green;
+}
