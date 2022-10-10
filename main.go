@@ -3,12 +3,17 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
 )
 
 var RCTF_SERVER = "https://2021.redpwn.net"
 
+var store = sessions.NewCookieStore([]byte(os.Getenv("CHALDEPLOY_SESSION_KEY")))
+
+// Log the incoming requests
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// don't log healthcheck b/c i don't care
@@ -20,6 +25,14 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+type sessionHandler func(w http.ResponseWriter, r *http.Request, s *sessions.Session)
+
+func (h sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s, _ := store.Get(r, "session")
+
+	h(w, r, s)
 }
 
 /*
@@ -35,7 +48,7 @@ func main() {
 
 	router.Use(loggingMiddleware)
 	router.HandleFunc("/healthcheck", healthCheck)
-	router.HandleFunc("/api/auth", clientAuth).Methods("POST")
+	router.Path("/api/auth").Handler(sessionHandler(clientAuth)).Methods("POST")
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./static/")))
 
 	log.Println("starting server on port 5050")

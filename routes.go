@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"log"
+
+	"github.com/gorilla/sessions"
 )
 
 // GET /healthcheck
@@ -15,8 +17,9 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/auth
-// takes the auth url/login token, and gets an auth token for the rCTF api
-func clientAuth(w http.ResponseWriter, r *http.Request) {
+// Takes the auth url/login token, and gets an auth token for the rCTF api
+// Returns back the team name and 200 if successful, otherwise 403/500+
+func clientAuth(w http.ResponseWriter, r *http.Request, s *sessions.Session) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Printf("error handling client auth, couldn't read body: %v", err)
@@ -44,7 +47,23 @@ func clientAuth(w http.ResponseWriter, r *http.Request) {
 
 	if authToken == "" {
 		w.WriteHeader(http.StatusForbidden)
-	} else {
-		w.Write([]byte(authToken))
+		return
 	}
+
+	// have a valid auth token, get team info
+	userInfo, err := getUserInfo(authToken)
+	if err != nil {
+		log.Printf("error handling client auth, couldn't get user info from rCTF: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// save the team data to the user's session
+	s.Values["teamName"] = userInfo.TeamName
+	s.Values["id"] = userInfo.Id
+	s.Values["authToken"] = authToken
+	s.Save(r, w)
+
+	// send back the team name
+	w.Write([]byte(userInfo.TeamName))
 }

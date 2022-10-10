@@ -61,11 +61,10 @@ function onAuthenticate(e) {
         } else if (r.status >= 500) {
             statusError(ELEMS.authStatus, "Server error, contact an @Admin");
         } else {
-            statusSuccess(ELEMS.authStatus, "Authed")
             return r.text();
         }
-    }).then(r => {
-        console.log(r);
+    }).then(teamName => {
+        statusSuccess(ELEMS.authStatus, `Authenticated as ${teamName}`);
     });
 }
 
@@ -81,7 +80,7 @@ function validateElems() {
     return !Object.keys(ELEMS).some(k => ELEMS[k] === null);
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 if (validateElems()) {
     registerHandlers();
