@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: chaldeploy
-        image: chaldeploy:v1
+        image: chaldeploy:v4
         ports:
         - containerPort: 5050
         resources:

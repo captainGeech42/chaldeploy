@@ -17,8 +17,8 @@ kubectl logs -l app=chaldeploy -f
 # to deploy a new service version
 #   - bump version number in image tag in deployment.yaml
 #   - and edit tag in below commands accordingly
-docker build -t chaldeploy:v1 .
-minikube image load chaldeploy:v1
+export CHALDEP_VER=v1
+docker build -t chaldeploy:$CHALDEP_VER . && minikube image load chaldeploy:$CHALDEP_VER
 kubectl apply -f deployment.yaml
 ```
 

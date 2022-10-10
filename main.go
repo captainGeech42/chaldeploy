@@ -23,7 +23,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 }
 
 func main() {
-	getDeployment()
+	// deployApp("OSUSEC")
 
 	mux := http.NewServeMux()
 
