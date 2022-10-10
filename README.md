@@ -2,6 +2,15 @@
 
 Web app to deploy a CTF challenge to k8s for single-team instance management
 
+![Screenshot of web app](./screenshot.png)
+
+## Features
+
+* Authenticate a team via rCTF, restricting each team to only a single deployment at a time
+* Deploy a challenge to a Kubernetes cluster and provide the team with a service endpoint to interact with it
+* Automatic challenge deletion after a timeout period
+  * Teams can extend this if desired
+
 ## k8s deployment
 
 ```bash
