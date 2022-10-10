@@ -1,9 +1,30 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
     <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+        <link href="style.css" rel="stylesheet">
+        
         <title>Chal Deploy</title>
     </head>
     <body>
-        hello from chal deploy v2
+        <div class="container">
+            <div style="margin-top: 15em" class="d-flex align-items-center justify-content-center">
+                <h1>Challenge Deployment</h1>
+            </div>
+            <div class="d-flex justify-content-center" style="margin-top: 2em">
+                <div class="mb-3" style="width: 35em">
+                    <label for="rctf-auth-url" class="form-label">Scoreboard Auth URL/Token</label>
+                    <textarea class="form-control url-text-field" id="rctf-auth-url" rows="4"></textarea>
+                </div>
+                <div class="mb-3" style="width: 35em">
+                    <button type="button" class="btn btn-primary">Primary</button>
+                </div>
+            </div>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
     </body>
 </html>
