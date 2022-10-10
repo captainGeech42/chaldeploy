@@ -10,18 +10,43 @@
         <title>Chal Deploy</title>
     </head>
     <body>
+        <!-- ATTENTION HACKERS: THIS IS NOT THE CHALLENGE YOU ARE LOOKING FOR -->
+
         <div class="container">
-            <div style="margin-top: 15em" class="d-flex align-items-center justify-content-center">
-                <h1>Challenge Deployment</h1>
+            <div class="col-sm mx-auto" style="margin-top: 12em">
+                <h1 style="text-align: center;">Challenge Deployment</h1>
             </div>
-            <div class="d-flex justify-content-center" style="margin-top: 2em">
-                <div class="mb-3" style="width: 35em">
+            <div class="col-sm mx-auto" style="width: 35em; margin-top: 2em;">
+                <div class="mb-3">
                     <label for="rctf-auth-url" class="form-label">Scoreboard Auth URL/Token</label>
                     <textarea class="form-control url-text-field" id="rctf-auth-url" rows="4"></textarea>
                 </div>
-                <div class="mb-3" style="width: 35em">
-                    <button type="button" class="btn btn-primary">Primary</button>
+                <div class="mb-3">
+                    <button type="button" class="btn btn-primary" style="width: 100%" id="btn-authenticate">Authenticate</button>
                 </div>
+            </div>
+            <div class="row mx-auto row-no-gutters" style="width: 35em">
+                <div class="col-sm col-no-gutters">
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-success" style="width: 100%" id="btn-create-instance">Create Instance</button>
+                    </div>
+                </div>
+                <div class="col-sm col-no-gutters">
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-warning" style="width: 100%" id="btn-extend-instance">Extend Instance</button>
+                    </div>
+                </div>
+                <div class="col-sm col-no-gutters">
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-danger" style="width: 100%" id="btn-destroy-instance">Destroy Instance</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm mx-auto mt-2" style="width: 35em;">
+                <b>Auth Status:</b> <span id="span-auth-status">not authenticated</span>
+            </div>
+            <div class="col-sm mx-auto mt-2" style="width: 35em;">
+                <b>Instance Status:</b> <span id="span-instance-status">no instance created</span>
             </div>
         </div>
 

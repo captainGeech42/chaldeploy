@@ -1,4 +1,15 @@
-.url-text-field {
+textarea.url-text-field {
     resize: none;
     font-family: 'Courier New', Courier, monospace
+}
+
+div.row-no-gutters {
+    margin-left: 0;
+    margin-right: 0;
+    gap: 10px;
+}
+
+div.col-no-gutters {
+    padding-left: 0;
+    padding-right: 0;
 }
