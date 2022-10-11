@@ -41,6 +41,19 @@ function statusError(span, text) {
     span.innerText = text;
 }
 
+// Set the proper enabled/disabled states on instance management buttons
+function toggleStateButtons(isActive) {
+    if (isActive) {
+        disableButton(ELEMS.create);
+        enableButton(ELEMS.extend);
+        enableButton(ELEMS.destroy);
+    } else {
+        enableButton(ELEMS.create);
+        disableButton(ELEMS.extend);
+        disableButton(ELEMS.destroy);
+    }
+}
+
 // Handler for when the contents of the auth url field change
 function onAuthFieldChange(e) {
     if (e?.target?.value?.length > 0) {
@@ -52,26 +65,88 @@ function onAuthFieldChange(e) {
 
 // Handler for the authenticate button being clicked
 function onAuthenticate(e) {
+    statusInfo(ELEMS.authStatus, "(attempting auth...)");
+
     fetch("/api/auth", {
         method: "POST",
         body: ELEMS.rctfAuthUrlField.value
     }).then(r => {
-        if (r.status == 403) {
+        if (r.status === 403) {
             statusError(ELEMS.authStatus, "Couldn't auth to rCTF, bad token/URL?");
-        } else if (r.status >= 500) {
+        } else if (r.status >= 400) {
             statusError(ELEMS.authStatus, "Server error, contact an @Admin");
         } else {
             return r.text();
         }
     }).then(teamName => {
-        statusSuccess(ELEMS.authStatus, `Authenticated as ${teamName}`);
+        if (teamName) {
+            statusSuccess(ELEMS.authStatus, `Authenticated as ${teamName}`);
+            disableButton(ELEMS.auth);
+            ELEMS.rctfAuthUrlField.readOnly = true;
+
+            getInstanceStatus();
+        }
     });
+}
+
+// Get the current instance status from the server
+// Enables buttons accordingly
+function getInstanceStatus() {
+    statusInfo(ELEMS.instanceStatus, "(fetching status...)")
+
+    fetch("/api/status")
+        .then(r => {
+            if (r.status === 403) {
+                statusError(ELEMS.authStatus, "Please refresh the page and re-authenticate");
+            } else if (r.status >= 400) {
+                statusError(ELEMS.instanceStatus, "Server error, contact an @Admin");
+            } else {
+                return r.json()
+            }
+        })
+        .then(data => {
+            if (data) {
+                if (data?.state === "active") {
+                    statusSuccess(ELEMS.instanceStatus, `Active instance available at ${data?.host}`);
+                    toggleStateButtons(true);
+                } else if (data?.state === "inactive") {
+                    statusInfo(ELEMS.instanceStatus, "No active instance");
+                    toggleStateButtons(false);
+                } else {
+                    statusError(ELEMS.instanceStatus, "Couldn't get instance info, contact an @Admin");
+                    console.error(data);
+                }
+            }
+        });
+}
+
+// Handler for the Create Instance button being clicked
+function onCreate(e) {
+    statusInfo(ELEMS.instanceStatus, "(creating instance...)")
+    
+    fetch("/api/create", { method: "POST" })
+        .then(r => {
+            if (r.status === 403) {
+                statusError(ELEMS.authStatus, "Please refresh the page and re-authenticate");
+            } else if (r.status >= 400) {
+                statusError(ELEMS.instanceStatus, "Server error, contact an @Admin");
+            } else {
+                return r.json()
+            }
+        })
+        .then(data => {
+            if (data) {
+                statusSuccess(ELEMS.instanceStatus, `Active instance available at ${data?.host}`);
+                toggleStateButtons(true);
+            }
+        });
 }
 
 // Register all event handlers for DOM elements
 function registerHandlers() {
     ELEMS.rctfAuthUrlField.oninput = onAuthFieldChange;
     ELEMS.auth.onclick = onAuthenticate;
+    ELEMS.create.onclick = onCreate;
 }
 
 // Make sure that each element was successfully identified in ELEMS
@@ -84,6 +159,12 @@ function validateElems() {
 
 if (validateElems()) {
     registerHandlers();
+
+    // on soft refresh, the old auth token may still be in the textarea
+    // make it a little easier for the user to re-auth
+    if (ELEMS.rctfAuthUrlField.value.length > 0) {
+        enableButton(ELEMS.auth);
+    }
 } else {
     console.error("Couldn't map elements into object, did the HTML change?");
 }

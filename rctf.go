@@ -8,10 +8,6 @@ import (
 	"net/http"
 )
 
-/*
-r = requests.get(BASE_URL + "/api/v1/integrations/ctftime/leaderboard", headers={"Authorization": f"Bearer {auth_token}"})
-*/
-
 // Fields always present in an API response from rCTF
 type RctfResponse struct {
 	Kind    string `json:"kind"`

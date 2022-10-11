@@ -13,6 +13,8 @@ Web app to deploy a CTF challenge to k8s for single-team instance management
 
 ## k8s deployment
 
+TODO: set `CHALDEPLOY_SESSION_KEY`
+
 ```bash
 # to do the initial deployment
 kubectl apply -f deployment.yaml

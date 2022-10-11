@@ -27,6 +27,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// custom http.Handler that adds a session parameter for router handlers to leverage
 type sessionHandler func(w http.ResponseWriter, r *http.Request, s *sessions.Session)
 
 func (h sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -46,9 +47,13 @@ func main() {
 
 	router := mux.NewRouter()
 
+	store.Options.SameSite = http.SameSiteStrictMode
+
 	router.Use(loggingMiddleware)
 	router.HandleFunc("/healthcheck", healthCheck)
-	router.Path("/api/auth").Handler(sessionHandler(clientAuth)).Methods("POST")
+	router.Path("/api/auth").Handler(sessionHandler(authRequest)).Methods("POST")
+	router.Path("/api/status").Handler(sessionHandler(statusRequest))
+	router.Path("/api/create").Handler(sessionHandler(createInstanceRequest)).Methods("POST")
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./static/")))
 
 	log.Println("starting server on port 5050")

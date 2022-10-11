@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
@@ -19,7 +20,7 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 // POST /api/auth
 // Takes the auth url/login token, and gets an auth token for the rCTF api
 // Returns back the team name and 200 if successful, otherwise 403/500+
-func clientAuth(w http.ResponseWriter, r *http.Request, s *sessions.Session) {
+func authRequest(w http.ResponseWriter, r *http.Request, s *sessions.Session) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Printf("error handling client auth, couldn't read body: %v", err)
@@ -62,8 +63,70 @@ func clientAuth(w http.ResponseWriter, r *http.Request, s *sessions.Session) {
 	s.Values["teamName"] = userInfo.TeamName
 	s.Values["id"] = userInfo.Id
 	s.Values["authToken"] = authToken
-	s.Save(r, w)
+	if err = s.Save(r, w); err != nil {
+		log.Printf("error handling client auth, couldn't save the session: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	// send back the team name
 	w.Write([]byte(userInfo.TeamName))
+}
+
+type StatusResponse struct {
+	State string `json:"state"` // "active" || "inactive"
+	Host  string `json:"host,omitempty"`
+	// ExpTime
+}
+
+// GET /api/status
+// Get the status of the team's deployment
+func statusRequest(w http.ResponseWriter, r *http.Request, s *sessions.Session) {
+	// make sure the session is valid
+	if _, exists := s.Values["id"]; s.IsNew || !exists {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	// TODO: check k8s for instance
+
+	resp := StatusResponse{State: "active", Host: "1.2.3.4:8989"}
+	// resp := StatusResponse{State: "inactive"}
+	respBytes, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("error handling status request, couldn't marshal response data: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(respBytes)
+}
+
+type CreateInstanceResponse struct {
+	Host string `json:"host"` // host:port string
+	// ExpTime
+}
+
+// POST /api/create
+// Create a deployment instance for the team
+func createInstanceRequest(w http.ResponseWriter, r *http.Request, s *sessions.Session) {
+	// make sure the session is valid
+	if _, exists := s.Values["id"]; s.IsNew || !exists {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	log.Printf("Deploying instance for %s (ID: %s)\n", s.Values["teamName"], s.Values["id"])
+
+	// TODO: create instance and store in memcache
+
+	resp := CreateInstanceResponse{Host: "1.2.3.4:8989"}
+	respBytes, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("error handling status request, couldn't marshal response data: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(respBytes)
 }

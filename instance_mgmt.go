@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
-	apiv1 "k8s.io/api/core/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -117,7 +116,7 @@ func deployApp(teamName string) {
 
 	deployment := getDeployment(appName)
 
-	deploymentsClient := clientset.AppsV1().Deployments(apiv1.NamespaceDefault)
+	deploymentsClient := clientset.AppsV1().Deployments(corev1.NamespaceDefault)
 	_, err = deploymentsClient.Create(context.TODO(), &deployment, metav1.CreateOptions{})
 	if err != nil {
 		panic(err)
