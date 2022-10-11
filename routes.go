@@ -12,6 +12,8 @@ import (
 	"github.com/gorilla/sessions"
 )
 
+var created bool = true
+
 // GET /healthcheck
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("app good to go"))
@@ -90,8 +92,14 @@ func statusRequest(w http.ResponseWriter, r *http.Request, s *sessions.Session) 
 
 	// TODO: check k8s for instance
 
-	resp := StatusResponse{State: "active", Host: "1.2.3.4:8989"}
-	// resp := StatusResponse{State: "inactive"}
+	var resp StatusResponse
+
+	if created {
+		resp = StatusResponse{State: "active", Host: "1.2.3.4:8989"}
+	} else {
+		resp = StatusResponse{State: "inactive"}
+	}
+
 	respBytes, err := json.Marshal(resp)
 	if err != nil {
 		log.Printf("error handling status request, couldn't marshal response data: %v", err)
@@ -123,10 +131,50 @@ func createInstanceRequest(w http.ResponseWriter, r *http.Request, s *sessions.S
 	resp := CreateInstanceResponse{Host: "1.2.3.4:8989"}
 	respBytes, err := json.Marshal(resp)
 	if err != nil {
-		log.Printf("error handling status request, couldn't marshal response data: %v", err)
+		log.Printf("error handling create instance request, couldn't marshal response data: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
+	created = true
+
+	w.Header().Add("Content-type", "application/json")
 	w.Write(respBytes)
+}
+
+// POST /api/extend
+// Extend the timeout for a deployment instance
+// Response on 200 is the new expiration timestamp
+func extendInstanceRequest(w http.ResponseWriter, r *http.Request, s *sessions.Session) {
+	// make sure the session is valid
+	if _, exists := s.Values["id"]; s.IsNew || !exists {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	log.Printf("Extending instance for %s (ID: %s)\n", s.Values["teamName"], s.Values["id"])
+
+	// TODO: extend instance and update memcache
+
+	w.Header().Add("Content-type", "text/plain")
+	w.Write([]byte("2022-01-01 12:34:56"))
+}
+
+// POST /api/destroy
+// Destroy a deployment instance
+// 200 means successfully destroy
+func destroyInstanceRequest(w http.ResponseWriter, r *http.Request, s *sessions.Session) {
+	// make sure the session is valid
+	if _, exists := s.Values["id"]; s.IsNew || !exists {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	log.Printf("Destroying instance for %s (ID: %s)\n", s.Values["teamName"], s.Values["id"])
+
+	// TODO: destroy instance and update memcache
+
+	created = false
+
+	w.WriteHeader(http.StatusOK)
 }

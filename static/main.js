@@ -6,7 +6,9 @@ ELEMS = {
     destroy: document.getElementById("btn-destroy-instance"),
     authStatus: document.getElementById("span-auth-status"),
     instanceStatus: document.getElementById("span-instance-status"),
-    rctfAuthUrlField: document.getElementById("ta-rctf-auth-url")
+    rctfAuthUrlField: document.getElementById("ta-rctf-auth-url"),
+    toastDiv: document.getElementById("notice-toast"),
+    toastBody: document.getElementById("notice-toast-body")
 }
 
 // Enable a button to be clicked
@@ -52,6 +54,14 @@ function toggleStateButtons(isActive) {
         disableButton(ELEMS.extend);
         disableButton(ELEMS.destroy);
     }
+}
+
+// Show a toast notification via Bootstrap
+function showNotice(text) {
+    toast = bootstrap.Toast.getOrCreateInstance(ELEMS.toastDiv);
+    ELEMS.toastBody.innerText = text;
+
+    toast.show();
 }
 
 // Handler for when the contents of the auth url field change
@@ -107,7 +117,7 @@ function getInstanceStatus() {
         .then(data => {
             if (data) {
                 if (data?.state === "active") {
-                    statusSuccess(ELEMS.instanceStatus, `Active instance available at ${data?.host}`);
+                    statusSuccess(ELEMS.instanceStatus, `Active instance available at ${data?.host}, expires at $TIME`);
                     toggleStateButtons(true);
                 } else if (data?.state === "inactive") {
                     statusInfo(ELEMS.instanceStatus, "No active instance");
@@ -136,8 +146,48 @@ function onCreate(e) {
         })
         .then(data => {
             if (data) {
-                statusSuccess(ELEMS.instanceStatus, `Active instance available at ${data?.host}`);
+                statusSuccess(ELEMS.instanceStatus, `Active instance available at ${data?.host}, expires at $TIME`);
                 toggleStateButtons(true);
+                showNotice("Successfully created instance");
+            }
+        });
+}
+
+// Handler for the Extend Instance button being clicked
+function onExtend(e) {
+    statusInfo(ELEMS.instanceStatus, "(extending instance...)")
+    
+    fetch("/api/extend", { method: "POST" })
+        .then(r => {
+            if (r.status === 403) {
+                statusError(ELEMS.authStatus, "Please refresh the page and re-authenticate");
+            } else if (r.status >= 400) {
+                statusError(ELEMS.instanceStatus, "Server error, contact an @Admin");
+            } else {
+                return r.text();
+            }
+        })
+        .then(data => {
+            if (data) {
+                showNotice("Successfully extended instance lifetime");
+                getInstanceStatus();
+            }
+        });
+}
+
+// Handler for the Destroy Instance button being clicked
+function onDestroy(e) {
+    statusInfo(ELEMS.instanceStatus, "(destroying instance...)")
+    
+    fetch("/api/destroy", { method: "POST" })
+        .then(r => {
+            if (r.status === 403) {
+                statusError(ELEMS.authStatus, "Please refresh the page and re-authenticate");
+            } else if (r.status >= 400) {
+                statusError(ELEMS.instanceStatus, "Server error, contact an @Admin");
+            } else {
+                showNotice("Successfully destroyed instance");
+                getInstanceStatus();
             }
         });
 }
@@ -147,6 +197,8 @@ function registerHandlers() {
     ELEMS.rctfAuthUrlField.oninput = onAuthFieldChange;
     ELEMS.auth.onclick = onAuthenticate;
     ELEMS.create.onclick = onCreate;
+    ELEMS.extend.onclick = onExtend;
+    ELEMS.destroy.onclick = onDestroy;
 }
 
 // Make sure that each element was successfully identified in ELEMS

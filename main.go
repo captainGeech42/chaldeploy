@@ -54,6 +54,8 @@ func main() {
 	router.Path("/api/auth").Handler(sessionHandler(authRequest)).Methods("POST")
 	router.Path("/api/status").Handler(sessionHandler(statusRequest))
 	router.Path("/api/create").Handler(sessionHandler(createInstanceRequest)).Methods("POST")
+	router.Path("/api/extend").Handler(sessionHandler(extendInstanceRequest)).Methods("POST")
+	router.Path("/api/destroy").Handler(sessionHandler(destroyInstanceRequest)).Methods("POST")
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./static/")))
 
 	log.Println("starting server on port 5050")

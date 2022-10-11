@@ -25,3 +25,7 @@ span.status-error {
 span.status-success {
     color: green;
 }
+
+i.icon {
+    margin-right: 5px;
+}
