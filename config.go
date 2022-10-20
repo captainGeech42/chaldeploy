@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -11,8 +12,8 @@ type Config struct {
 	// $CHALDEPLOY_NAME: Name of the challenge to deploy
 	ChallengeName string `env:"CHALDEPLOY_NAME"`
 
-	// $CHALDEPLOY_PORT: Port exposed by the challenge
-	ChallengePort string `env:"CHALDEPLOY_PORT"`
+	// $CHALDEPLOY_PORT: Port exposed by the challenge, must be 1-65535
+	ChallengePort int `env:"CHALDEPLOY_PORT"`
 
 	// $CHALDEPLOY_IMAGE: Image path for the challenge
 	ChallengeImage string `env:"CHALDEPLOY_IMAGE"`
@@ -54,7 +55,18 @@ func loadConfig() (*Config, error) {
 		// make sure it's set if not optional
 		if data != "" || Contains(tagParts[1:], "optional") {
 			// set the value
-			reflect.ValueOf(&config).Elem().Field(i).Set(reflect.ValueOf(data))
+			if f.Type.Kind() == reflect.Int {
+				// need to save as an int
+				if intVal, err := strconv.Atoi(data); err != nil {
+					return nil, fmt.Errorf("couldn't convert value to integer: %s", data)
+				} else {
+					reflect.ValueOf(&config).Elem().Field(i).Set(reflect.ValueOf(intVal))
+				}
+			} else {
+				// can save as a string
+				reflect.ValueOf(&config).Elem().Field(i).Set(reflect.ValueOf(data))
+			}
+
 		} else {
 			// a value was needed, error
 			return nil, fmt.Errorf("a necessary environment variable was not set: $%s", tagParts[0])

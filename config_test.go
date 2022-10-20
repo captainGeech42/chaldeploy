@@ -19,7 +19,7 @@ func TestFullConfig(t *testing.T) {
 	assert.NotNil(t, config)
 
 	assert.Equal(t, "test chal name", config.ChallengeName)
-	assert.Equal(t, "12345", config.ChallengePort)
+	assert.Equal(t, 12345, config.ChallengePort)
 	assert.Equal(t, "testimg:latest", config.ChallengeImage)
 	assert.Equal(t, "https://2021.redpwn.net", config.RctfServer)
 	assert.Equal(t, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", config.SessionKey)
@@ -38,7 +38,7 @@ func TestPartialConfig(t *testing.T) {
 	assert.NotNil(t, config)
 
 	assert.Equal(t, "test chal name", config.ChallengeName)
-	assert.Equal(t, "12345", config.ChallengePort)
+	assert.Equal(t, 12345, config.ChallengePort)
 	assert.Equal(t, "testimg:latest", config.ChallengeImage)
 	assert.Equal(t, "https://2021.redpwn.net", config.RctfServer)
 	assert.Equal(t, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", config.SessionKey)
@@ -48,6 +48,18 @@ func TestPartialConfig(t *testing.T) {
 func TestInvalidConfig(t *testing.T) {
 	t.Setenv("CHALDEPLOY_NAME", "test chal name")
 	t.Setenv("CHALDEPLOY_PORT", "12345")
+	t.Setenv("CHALDEPLOY_SESSION_KEY", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+
+	config, err := loadConfig()
+	assert.NotNil(t, err)
+	assert.Nil(t, config)
+}
+
+func TestInvalidPortConfig(t *testing.T) {
+	t.Setenv("CHALDEPLOY_NAME", "test chal name")
+	t.Setenv("CHALDEPLOY_PORT", "zzz")
+	t.Setenv("CHALDEPLOY_IMAGE", "testimg:latest")
+	t.Setenv("CHALDEPLOY_RCTF_SERVER", "https://2021.redpwn.net")
 	t.Setenv("CHALDEPLOY_SESSION_KEY", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
 	config, err := loadConfig()

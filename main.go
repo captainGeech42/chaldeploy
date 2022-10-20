@@ -9,8 +9,9 @@ import (
 )
 
 // globals
-var RCTF_SERVER = ""
-var store *sessions.CookieStore
+var config *Config = nil
+var store *sessions.CookieStore = nil
+var im *InstanceManager = nil
 
 // Log the incoming requests
 func loggingMiddleware(next http.Handler) http.Handler {
@@ -30,9 +31,15 @@ func loggingMiddleware(next http.Handler) http.Handler {
 type sessionHandler func(w http.ResponseWriter, r *http.Request, s *sessions.Session)
 
 func (h sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s, _ := store.Get(r, "session")
+	// make sure the session global is set
+	if store == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("store global isn't set, couldn't execute http handler with session info")
+	} else {
+		s, _ := store.Get(r, "session")
 
-	h(w, r, s)
+		h(w, r, s)
+	}
 }
 
 /*
@@ -43,9 +50,10 @@ easier than doing a db though
 
 func main() {
 	// load config
-	config, err := loadConfig()
-	if err != nil {
+	if c, err := loadConfig(); err != nil {
 		log.Fatalln(err)
+	} else {
+		config = c
 	}
 
 	// initialize router
@@ -58,11 +66,17 @@ func main() {
 	store = sessions.NewCookieStore([]byte(config.SessionKey))
 	store.Options.SameSite = http.SameSiteStrictMode
 
-	// register routes
+	// initialize instance manager
+	im = &InstanceManager{}
+	if err := im.Init(); err != nil {
+		log.Fatalf("couldn't init InstanceManager: %v\n", err)
+	}
+
+	// setup router
 	router.Use(loggingMiddleware)
-	router.HandleFunc("/healthcheck", healthCheck)
+	router.HandleFunc("/healthcheck", healthCheck).Methods("GET")
 	router.Path("/api/auth").Handler(sessionHandler(authRequest)).Methods("POST")
-	router.Path("/api/status").Handler(sessionHandler(statusRequest))
+	router.Path("/api/status").Handler(sessionHandler(statusRequest)).Methods("GET")
 	router.Path("/api/create").Handler(sessionHandler(createInstanceRequest)).Methods("POST")
 	router.Path("/api/extend").Handler(sessionHandler(extendInstanceRequest)).Methods("POST")
 	router.Path("/api/destroy").Handler(sessionHandler(destroyInstanceRequest)).Methods("POST")

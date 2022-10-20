@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"flag"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -19,20 +19,48 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
+// InstanceManager stores the necessary data for creating and destroying challenge instances on a k8s cluster
 type InstanceManager struct {
-	// Pointer to the app config
-	appConfig *Config
+	Config    *rest.Config
+	Clientset *kubernetes.Clientset
 }
 
-func (im *InstanceManager) Init(config *Config) {
-	im.appConfig = config
+func (im *InstanceManager) Init() error {
+	// load the cluster config
+	k8sConfig, err := getConfigForCluster()
+	if err != nil {
+		return err
+	} else {
+		im.Config = k8sConfig
+	}
+
+	// create the clientset
+	clientset, err := kubernetes.NewForConfig(k8sConfig)
+	if err != nil {
+		return err
+	} else {
+		im.Clientset = clientset
+	}
 
 	// TODO: init memcache
+	return nil
 }
 
 // Deploy an instance of a challenge for a team
 // Returns the connection string and error
+// ref:
+//   - https://github.com/kubernetes/client-go/blob/master/examples/in-cluster-client-configuration/main.go
+//   - https://github.com/kubernetes/client-go/blob/master/examples/create-update-delete-deployment/main.go
 func (im *InstanceManager) CreateDeployment(teamName, teamId string) (string, error) {
+	appName := strings.ToLower(fmt.Sprintf("chaldeploy-app-%s", teamName))
+
+	deployment := getDeployment(appName)
+
+	deploymentsClient := im.Clientset.AppsV1().Deployments(corev1.NamespaceDefault)
+	_, err := deploymentsClient.Create(context.TODO(), &deployment, metav1.CreateOptions{})
+	if err != nil {
+		panic(err)
+	}
 
 	return "", nil
 }
@@ -64,10 +92,10 @@ func getDeployment(appName string) appsv1.Deployment {
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:            "test-nc",
-							Image:           "test-nc:v2",
-							ImagePullPolicy: "Never",
-							Ports:           []corev1.ContainerPort{{ContainerPort: 31337}},
+							Name:            strings.Split(config.ChallengeImage, ":")[0],
+							Image:           config.ChallengeImage,
+							ImagePullPolicy: "Never", // TODO: adjust as needed off of minikube
+							Ports:           []corev1.ContainerPort{{ContainerPort: int32(config.ChallengePort)}},
 							Resources: corev1.ResourceRequirements{
 								Limits: corev1.ResourceList{
 									corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -84,61 +112,63 @@ func getDeployment(appName string) appsv1.Deployment {
 	return deployment
 }
 
-func getConfigForCluster() *rest.Config {
-	// check if we have an injected service account token available
-	if _, err := os.Stat("/var/run/secrets/kubernetes.io/serviceaccount"); os.IsNotExist(err) {
-		log.Println("service account not found, loading current context from k8s config in home dir")
+// Identify the proper source for the cluster config and load it
+// Load order:
+//   - $CHALDEPLOY_K8SCONFIG
+//   - /var/run/secrets/kubernetes.io/serviceaccount
+//   - ~/.kube/config current context
+func getConfigForCluster() (*rest.Config, error) {
+	// check if a path to the k8s config was specified
+	if config.K8sConfigPath != "" {
+		log.Printf("using k8s config path from env var: %s\n", config.K8sConfigPath)
 
-		// ref: https://github.com/kubernetes/client-go/blob/master/examples/out-of-cluster-client-configuration/main.go#L43
-		var kubeconfig *string
-		if home := homedir.HomeDir(); home != "" {
-			kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+		// check if it exists
+		if _, err := os.Stat(config.K8sConfigPath); os.IsExist(err) {
+			// file exists, try to use it
+			k8sConfig, err := clientcmd.BuildConfigFromFlags("", config.K8sConfigPath)
+			if err != nil {
+				return k8sConfig, nil
+			} else {
+				return nil, err
+			}
 		} else {
-			kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+			return nil, errors.New("specified filepath for k8s config doesn't exist")
 		}
-		flag.Parse()
-
-		// use the current context in kubeconfig
-		config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
-		if err != nil {
-			panic(err.Error())
-		}
-
-		return config
 	} else {
-		log.Println("found a service account, using k8s config from it")
+		// no path was specified, try an injected service account
+		if _, err := os.Stat("/var/run/secrets/kubernetes.io/serviceaccount"); os.IsExist(err) {
+			log.Println("found a service account, using k8s config from it")
 
-		// ref: https://github.com/kubernetes/client-go/blob/master/examples/in-cluster-client-configuration/main.go#L41
-		config, err := rest.InClusterConfig()
-		if err != nil {
-			panic(err.Error())
+			// ref: https://github.com/kubernetes/client-go/blob/master/examples/in-cluster-client-configuration/main.go#L41
+			k8sConfig, err := rest.InClusterConfig()
+			if err != nil {
+				return k8sConfig, nil
+			} else {
+				return nil, err
+			}
+		} else {
+			// no service account, try ~/.kube/config
+			log.Println("service account not found, loading current context from k8s config in home dir")
+
+			// ref: https://github.com/kubernetes/client-go/blob/master/examples/out-of-cluster-client-configuration/main.go#L43
+			var configPath string
+			if home := homedir.HomeDir(); home != "" {
+				configPath = filepath.Join(home, ".kube", "config")
+			} else {
+				return nil, errors.New("couldn't resolve home directory, can't load local k8s config")
+			}
+
+			if _, err := os.Stat(configPath); os.IsNotExist(err) {
+				return nil, errors.New("couldn't find a k8s config to load")
+			}
+
+			// use the current context in kubeconfig
+			k8sConfig, err := clientcmd.BuildConfigFromFlags("", configPath)
+			if err != nil {
+				return k8sConfig, nil
+			} else {
+				return nil, err
+			}
 		}
-
-		return config
-	}
-}
-
-func deployApp(teamName string) {
-	// ref:
-	//   - https://github.com/kubernetes/client-go/blob/master/examples/in-cluster-client-configuration/main.go
-	//   - https://github.com/kubernetes/client-go/blob/master/examples/create-update-delete-deployment/main.go
-
-	// get the proper config
-	config := getConfigForCluster()
-
-	// creates the clientset
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	appName := strings.ToLower(fmt.Sprintf("chaldeploy-app-%s", teamName))
-
-	deployment := getDeployment(appName)
-
-	deploymentsClient := clientset.AppsV1().Deployments(corev1.NamespaceDefault)
-	_, err = deploymentsClient.Create(context.TODO(), &deployment, metav1.CreateOptions{})
-	if err != nil {
-		panic(err)
 	}
 }

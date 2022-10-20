@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,6 +43,10 @@ type RctfUserInfoResponse struct {
 // If comms are successful but auth is bad, returns ("", nil)
 // Otherwise, returns (authToken, nil)
 func authToRctf(loginToken string) (string, error) {
+	if config == nil {
+		return "", errors.New("config global isn't set")
+	}
+
 	reqBody, err := json.Marshal(map[string]string{
 		"teamToken": loginToken,
 	})
@@ -50,7 +55,7 @@ func authToRctf(loginToken string) (string, error) {
 		return "", err
 	}
 
-	resp, err := http.Post(RCTF_SERVER+"/api/v1/auth/login", "application/json", bytes.NewBuffer(reqBody))
+	resp, err := http.Post(config.RctfServer+"/api/v1/auth/login", "application/json", bytes.NewBuffer(reqBody))
 	if err != nil {
 		return "", err
 	}
@@ -76,7 +81,11 @@ func authToRctf(loginToken string) (string, error) {
 
 // Get user info from the rCTF API
 func getUserInfo(authToken string) (*RctfUserInfoData, error) {
-	req, err := http.NewRequest(http.MethodGet, RCTF_SERVER+"/api/v1/users/me", nil)
+	if config == nil {
+		return nil, errors.New("config global isn't set")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, config.RctfServer+"/api/v1/users/me", nil)
 	if err != nil {
 		return nil, err
 	}
