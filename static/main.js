@@ -141,14 +141,8 @@ function onCreate(e) {
             } else if (r.status >= 400) {
                 statusError(ELEMS.instanceStatus, "Server error, contact an @Admin");
             } else {
-                return r.json()
-            }
-        })
-        .then(data => {
-            if (data) {
-                statusSuccess(ELEMS.instanceStatus, `Active instance available at ${data?.host}, expires at $TIME`);
-                toggleStateButtons(true);
                 showNotice("Successfully created instance");
+                getInstanceStatus();
             }
         });
 }

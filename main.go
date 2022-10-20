@@ -3,15 +3,14 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 )
 
-var RCTF_SERVER = "https://2021.redpwn.net"
-
-var store = sessions.NewCookieStore([]byte(os.Getenv("CHALDEPLOY_SESSION_KEY")))
+// globals
+var RCTF_SERVER = ""
+var store *sessions.CookieStore
 
 // Log the incoming requests
 func loggingMiddleware(next http.Handler) http.Handler {
@@ -43,12 +42,23 @@ easier than doing a db though
 */
 
 func main() {
-	// deployApp("OSUSEC")
+	// load config
+	config, err := loadConfig()
+	if err != nil {
+		log.Fatalln(err)
+	}
 
+	// initialize router
 	router := mux.NewRouter()
 
+	// initialize session store
+	if sessKeyLen := len(config.SessionKey); !Contains([]int{32, 64}, sessKeyLen) {
+		log.Fatalf("the session key is an invalid length: %d (must be 32 or 64)\n", sessKeyLen)
+	}
+	store = sessions.NewCookieStore([]byte(config.SessionKey))
 	store.Options.SameSite = http.SameSiteStrictMode
 
+	// register routes
 	router.Use(loggingMiddleware)
 	router.HandleFunc("/healthcheck", healthCheck)
 	router.Path("/api/auth").Handler(sessionHandler(authRequest)).Methods("POST")
@@ -58,6 +68,7 @@ func main() {
 	router.Path("/api/destroy").Handler(sessionHandler(destroyInstanceRequest)).Methods("POST")
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./static/")))
 
+	// start the server
 	log.Println("starting server on port 5050")
 	log.Fatalln(http.ListenAndServe(":5050", router))
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/gorilla/sessions"
 )
 
-var created bool = true
+var created bool = false
 
 // GET /healthcheck
 func healthCheck(w http.ResponseWriter, r *http.Request) {

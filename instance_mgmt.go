@@ -19,6 +19,26 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
+type InstanceManager struct {
+	// Pointer to the app config
+	appConfig *Config
+}
+
+func (im *InstanceManager) Init(config *Config) {
+	im.appConfig = config
+
+	// TODO: init memcache
+}
+
+// Deploy an instance of a challenge for a team
+// Returns the connection string and error
+func (im *InstanceManager) CreateDeployment(teamName, teamId string) (string, error) {
+
+	return "", nil
+}
+
+/////////////////////////////////
+
 // get a labelselector object that can be used for the deployment and service objects
 func getSelector(appName string) *metav1.LabelSelector {
 	return &metav1.LabelSelector{

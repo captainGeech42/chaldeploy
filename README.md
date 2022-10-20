@@ -8,12 +8,36 @@ Web app to deploy a CTF challenge to k8s for single-team instance management
 
 * Authenticate a team via rCTF, restricting each team to only a single deployment at a time
 * Deploy a challenge to a Kubernetes cluster and provide the team with a service endpoint to interact with it
+  * k8s config based on the deployments performed by [rCDS](https://github.com/redpwn/rcds/tree/master/rcds/backends/k8s)
 * Automatic challenge deletion after a timeout period
   * Teams can extend this if desired
 
+## Usage
+
+You need to set the following environment variables:
+
+* `$CHALDEPLOY_NAME`
+  * Name of the challenge to deploy
+  * ex: `My First Pwn`
+* `$CHALDEPLOY_PORT`
+  * Port exposed by the challenge
+  * ex: `12345`
+* `$CHALDEPLOY_IMAGE`
+  * Image path for the challenge
+  * ex: `myfirstpwn:latest`
+* `$CHALDEPLOY_SESSION_KEY`
+  * Secret key used to authenticate session data. Must be 32 or 64 chars long
+  * ex: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`
+* `$CHALDEPLOY_RCTF_SERVER`
+  * rCTF server to auth against
+  * ex: `https://2021.redpwn.net`
+* `$CHALDEPLOY_K8SCONFIG` (optional)
+  * Path to the k8s config. If not set, k8s config will be loaded from /var/run/secrets or ~/.kube
+  * ex: `/home/user/specialconfig`
+
 ## k8s deployment
 
-TODO: set `CHALDEPLOY_SESSION_KEY`
+TODO: set env vars
 
 ```bash
 # to do the initial deployment
