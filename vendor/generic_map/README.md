@@ -1,0 +1,1 @@
+source: https://github.com/SaveTheRbtz/generic-sync-map-go
