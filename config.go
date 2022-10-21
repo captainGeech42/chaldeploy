@@ -28,7 +28,7 @@ type Config struct {
 	K8sConfigPath string `env:"CHALDEPLOY_K8SCONFIG,optional"`
 }
 
-// Load the config from env vars
+// Load the config from env vars. Supports int and string types, along with an 'optional' modifier
 // ref:
 //   - https://linuxhint.com/golang-struct-tags/
 //   - https://stackoverflow.com/a/6396678
@@ -66,7 +66,6 @@ func loadConfig() (*Config, error) {
 				// can save as a string
 				reflect.ValueOf(&config).Elem().Field(i).Set(reflect.ValueOf(data))
 			}
-
 		} else {
 			// a value was needed, error
 			return nil, fmt.Errorf("a necessary environment variable was not set: $%s", tagParts[0])

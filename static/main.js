@@ -102,7 +102,7 @@ function onAuthenticate(e) {
 // Get the current instance status from the server
 // Enables buttons accordingly
 function getInstanceStatus() {
-    statusInfo(ELEMS.instanceStatus, "(fetching status...)")
+    statusInfo(ELEMS.instanceStatus, "(fetching status...)");
 
     fetch("/api/status")
         .then(r => {
@@ -132,7 +132,7 @@ function getInstanceStatus() {
 
 // Handler for the Create Instance button being clicked
 function onCreate(e) {
-    statusInfo(ELEMS.instanceStatus, "(creating instance...)")
+    statusInfo(ELEMS.instanceStatus, "(creating instance...)");
     
     fetch("/api/create", { method: "POST" })
         .then(r => {
@@ -149,7 +149,7 @@ function onCreate(e) {
 
 // Handler for the Extend Instance button being clicked
 function onExtend(e) {
-    statusInfo(ELEMS.instanceStatus, "(extending instance...)")
+    statusInfo(ELEMS.instanceStatus, "(extending instance...)");
     
     fetch("/api/extend", { method: "POST" })
         .then(r => {
@@ -171,7 +171,7 @@ function onExtend(e) {
 
 // Handler for the Destroy Instance button being clicked
 function onDestroy(e) {
-    statusInfo(ELEMS.instanceStatus, "(destroying instance...)")
+    statusInfo(ELEMS.instanceStatus, "(destroying instance...)");
     
     fetch("/api/destroy", { method: "POST" })
         .then(r => {

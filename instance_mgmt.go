@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -19,12 +20,79 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
-// InstanceManager stores the necessary data for creating and destroying challenge instances on a k8s cluster
-type InstanceManager struct {
-	Config    *rest.Config
-	Clientset *kubernetes.Clientset
+type InstanceState int64
+
+const (
+	// a Running instance is live and can be accessed by the team
+	Running InstanceState = iota
+
+	// a Destroying instance is something in the process of being torn down.
+	// From the perspective of the user, it is destroyed.
+	// However, from the perspective of the backend, it isn't in a state where
+	// it can be recreated.
+	Destroying
+
+	// a Destroyed instance doesn't exist anymore, and can be (re)deployed.
+	// This is the first state of a DeploymentInstance
+	Destroyed
+)
+
+func (s InstanceState) String() string {
+	switch s {
+	case Running:
+		return "running"
+	case Destroying:
+		return "destroying"
+	case Destroyed:
+		return "destroyed"
+	default:
+		return "(unknown enum value)"
+	}
 }
 
+// DeploymentInstance is a single deployment of a challenge for a team
+type DeploymentInstance struct {
+	// value for the `app` label
+	AppName string
+
+	// expiration time for the instance
+	// ExpTime string
+
+	// the current state of the instance
+	State InstanceState
+
+	// lock for mutating the state of the instance
+	mu *sync.Mutex
+}
+
+// implement sync.Locker on DeploymentInstance
+func (di *DeploymentInstance) Lock() {
+	di.mu.Lock()
+}
+
+func (di *DeploymentInstance) Unlock() {
+	di.mu.Unlock()
+}
+
+// InstanceManager stores the necessary data for creating and destroying challenge instances on a k8s cluster
+type InstanceManager struct {
+	// k8s config
+	Config *rest.Config
+
+	// k8s client
+	Clientset *kubernetes.Clientset
+
+	// mutex for controlling access to the instance map
+	Lock *sync.RWMutex
+
+	// map of team id -> instance
+	// key should be a string
+	// value should be a *DeploymentInstance
+	Instances sync.Map
+}
+
+// Initialize the instance manager object, including authing to the cluster
+// TODO: ensure necessary permissions are obtained
 func (im *InstanceManager) Init() error {
 	// load the cluster config
 	k8sConfig, err := getConfigForCluster()
@@ -42,6 +110,8 @@ func (im *InstanceManager) Init() error {
 		im.Clientset = clientset
 	}
 
+	im.Lock.Lock()
+
 	// TODO: init memcache
 	return nil
 }
@@ -54,7 +124,7 @@ func (im *InstanceManager) Init() error {
 func (im *InstanceManager) CreateDeployment(teamName, teamId string) (string, error) {
 	appName := strings.ToLower(fmt.Sprintf("chaldeploy-app-%s", teamName))
 
-	deployment := getDeployment(appName)
+	deployment := getDeployment(appName, teamName, teamId)
 
 	deploymentsClient := im.Clientset.AppsV1().Deployments(corev1.NamespaceDefault)
 	_, err := deploymentsClient.Create(context.TODO(), &deployment, metav1.CreateOptions{})
@@ -75,13 +145,18 @@ func getSelector(appName string) *metav1.LabelSelector {
 }
 
 // get the deployment struct for the target app
-func getDeployment(appName string) appsv1.Deployment {
+func getDeployment(appName, teamName, teamId string) appsv1.Deployment {
 	selector := getSelector(appName)
 
 	deployment := appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   appName,
-			Labels: map[string]string{"app": appName, "chaldeploy-target": "yes"},
+			Name: appName,
+			Labels: map[string]string{
+				"app":                                appName,
+				"chaldeploy.captaingee.ch/target":    "yes",
+				"chaldeploy.captaingee.ch/team-name": teamName,
+				"chaldeploy.captaingee.ch/team-id":   teamId,
+			},
 		},
 		Spec: appsv1.DeploymentSpec{
 			Selector: selector,
@@ -98,7 +173,7 @@ func getDeployment(appName string) appsv1.Deployment {
 							Ports:           []corev1.ContainerPort{{ContainerPort: int32(config.ChallengePort)}},
 							Resources: corev1.ResourceRequirements{
 								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("500m"),
+									corev1.ResourceCPU:    resource.MustParse("500m"), // TODO: configify these
 									corev1.ResourceMemory: resource.MustParse("256Mi"),
 								},
 							},
