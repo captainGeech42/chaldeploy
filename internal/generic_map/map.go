@@ -1,3 +1,5 @@
+// copied from https://github.com/SaveTheRbtz/generic-sync-map-go/blob/main/map.go
+
 // Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.

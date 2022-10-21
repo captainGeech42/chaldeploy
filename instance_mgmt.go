@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/captainGeech42/chaldeploy/internal/generic_map"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -88,7 +90,8 @@ type InstanceManager struct {
 	// map of team id -> instance
 	// key should be a string
 	// value should be a *DeploymentInstance
-	Instances sync.Map
+	// Instances sync.Map
+	Instances *generic_map.MapOf[string, *DeploymentInstance]
 }
 
 // Initialize the instance manager object, including authing to the cluster
@@ -110,9 +113,9 @@ func (im *InstanceManager) Init() error {
 		im.Clientset = clientset
 	}
 
-	im.Lock.Lock()
+	// initialize the map
+	im.Instances = new(generic_map.MapOf[string, *DeploymentInstance])
 
-	// TODO: init memcache
 	return nil
 }
 
