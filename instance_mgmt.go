@@ -205,9 +205,9 @@ func getConfigForCluster() (*rest.Config, error) {
 			// file exists, try to use it
 			k8sConfig, err := clientcmd.BuildConfigFromFlags("", config.K8sConfigPath)
 			if err != nil {
-				return k8sConfig, nil
-			} else {
 				return nil, err
+			} else {
+				return k8sConfig, nil
 			}
 		} else {
 			return nil, errors.New("specified filepath for k8s config doesn't exist")
@@ -220,9 +220,9 @@ func getConfigForCluster() (*rest.Config, error) {
 			// ref: https://github.com/kubernetes/client-go/blob/master/examples/in-cluster-client-configuration/main.go#L41
 			k8sConfig, err := rest.InClusterConfig()
 			if err != nil {
-				return k8sConfig, nil
-			} else {
 				return nil, err
+			} else {
+				return k8sConfig, nil
 			}
 		} else {
 			// no service account, try ~/.kube/config
