@@ -17,8 +17,6 @@ import (
 	"github.com/gorilla/sessions"
 )
 
-var created bool = false
-
 // don't flame me, i'm lazy
 var cachedIndex = ""
 var cachedIndexLock sync.Mutex
@@ -127,6 +125,8 @@ func authRequest(w http.ResponseWriter, r *http.Request, s *sessions.Session) {
 		return
 	}
 
+	log.Printf("successfully authenticated %s (ID: %s)", userInfo.TeamName, userInfo.Id)
+
 	// send back the team name
 	w.Write([]byte(userInfo.TeamName))
 }
@@ -146,12 +146,13 @@ func statusRequest(w http.ResponseWriter, r *http.Request, s *sessions.Session) 
 		return
 	}
 
-	// TODO: check k8s for instance
+	/// get the deployment instance
+	di := im.GetDeploymentInstance(s.Values["id"].(string))
 
 	var resp StatusResponse
 
-	if created {
-		resp = StatusResponse{State: "active", Host: "1.2.3.4:8989"}
+	if di != nil && di.State == Running {
+		resp = StatusResponse{State: "active", Host: di.Cxn}
 	} else {
 		resp = StatusResponse{State: "inactive"}
 	}
@@ -183,7 +184,7 @@ func createInstanceRequest(w http.ResponseWriter, r *http.Request, s *sessions.S
 	log.Printf("Deploying instance for %s (ID: %s)\n", s.Values["teamName"], s.Values["id"])
 
 	// create the deployment
-	cxn, err := im.CreateDeployment(s.Values["teamName"].(string), s.Values["id"].(string))
+	cxn, err := im.CreateDeployment(s.Values["id"].(string))
 	if err != nil {
 		log.Printf("couldn't create a deployment for %s: %v", s.Values["teamName"], err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -232,9 +233,11 @@ func destroyInstanceRequest(w http.ResponseWriter, r *http.Request, s *sessions.
 
 	log.Printf("Destroying instance for %s (ID: %s)\n", s.Values["teamName"], s.Values["id"])
 
-	// TODO: destroy instance and update memcache
-
-	created = false
+	if err := im.DestroyDeployment(s.Values["id"].(string)); err != nil {
+		log.Printf("error handling delete instance request, couldn't delete deployment: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
 }

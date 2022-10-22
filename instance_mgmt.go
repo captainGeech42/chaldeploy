@@ -68,6 +68,9 @@ type DeploymentInstance struct {
 
 	// lock for mutating the state of the instance
 	mu *sync.Mutex
+
+	// connection string to present to the team so they can use the instance
+	Cxn string
 }
 
 // implement sync.Locker on DeploymentInstance
@@ -116,6 +119,8 @@ func (im *InstanceManager) Init() error {
 	// initialize the map
 	im.Instances = new(generic_map.MapOf[string, *DeploymentInstance])
 
+	// TODO: go through the k8s namespaces and identify what is running
+
 	return nil
 }
 
@@ -124,33 +129,49 @@ func (im *InstanceManager) Init() error {
 // ref:
 //   - https://github.com/kubernetes/client-go/blob/master/examples/in-cluster-client-configuration/main.go
 //   - https://github.com/kubernetes/client-go/blob/master/examples/create-update-delete-deployment/main.go
-func (im *InstanceManager) CreateDeployment(teamName, teamId string) (string, error) {
+func (im *InstanceManager) CreateDeployment(teamId string) (string, error) {
 	// compute a unique identifer for this deployment
 	uniqName := strings.ToLower(fmt.Sprintf("chaldeploy-%s-%s", HashString(config.ChallengeName), strings.ReplaceAll(teamId, "-", "")))
 
-	// initialize the Deployment Instance
-	di := DeploymentInstance{
+	// initialize the DeploymentInstance
+	di := &DeploymentInstance{
 		AppName:   uniqName,
 		Namespace: uniqName,
 		State:     Destroyed,
+		mu:        &sync.Mutex{},
+	}
+	di, _ = im.Instances.LoadOrStore(teamId, di)
+
+	di.mu.Lock()
+	defer di.mu.Unlock()
+	if di.State == Destroyed {
+		// get the k8s objects
+		namespace := getNamespace(uniqName, teamId)
+		deployment := getDeployment(di.AppName, teamId)
+
+		// create the k8s objects
+		namespaceClient := im.Clientset.CoreV1().Namespaces()
+		if _, err := namespaceClient.Create(context.TODO(), namespace, metav1.CreateOptions{}); err != nil {
+			return "", fmt.Errorf("failed to create the namespace for %s: %v", uniqName, err)
+		}
+		deploymentsClient := im.Clientset.AppsV1().Deployments(di.Namespace)
+		if _, err := deploymentsClient.Create(context.TODO(), deployment, metav1.CreateOptions{}); err != nil {
+			return "", fmt.Errorf("failed to create the deployment for %s: %v", uniqName, err)
+		}
+
+		// update the instance state
+		di.State = Running
+		di.Cxn = "1.2.3.4:9999"
 	}
 
-	// get the k8s deployment object
-	// TODO: get the other k8s objects
-	deployment := getDeployment(di.AppName, teamName, teamId)
+	return di.Cxn, nil
+}
 
-	// create the k8s objects
-	deploymentsClient := im.Clientset.AppsV1().Deployments(di.Namespace)
-	_, err := deploymentsClient.Create(context.TODO(), &deployment, metav1.CreateOptions{})
-	if err != nil {
-		panic(err)
-	}
-
-	// save the instance
-	di.State = Running
-	im.Instances.Store(teamId, &di)
-
-	return "1.2.3.4:9999", nil
+// get the deployment instance for a team, if there is one.
+// if the return value is nil, that means there is no deployment
+func (im *InstanceManager) GetDeploymentInstance(teamId string) *DeploymentInstance {
+	di, _ := im.Instances.Load(teamId)
+	return di
 }
 
 // Destroy a challenge deployment
@@ -171,11 +192,11 @@ func (im *InstanceManager) DestroyDeployment(teamId string) error {
 	di.State = Destroying
 	di.mu.Unlock()
 
-	// init clients in the right namespace
-	deploymentsClient := im.Clientset.AppsV1().Deployments(di.Namespace)
+	// init client
+	client := im.Clientset.CoreV1().Namespaces()
 
-	// check if the resource exists, exit if it doesn't
-	if deployment, err := deploymentsClient.Get(context.TODO(), di.AppName, metav1.GetOptions{}); err != nil || deployment == nil {
+	// check if the namespace exists, return if it doesn't
+	if namespace, err := client.Get(context.TODO(), di.AppName, metav1.GetOptions{}); err != nil || namespace == nil {
 		// TODO: investigate how err can be set (e.g., failed to lookup vs successfully looked up and confirmed non-existent)
 		return nil
 	}
@@ -185,10 +206,11 @@ func (im *InstanceManager) DestroyDeployment(teamId string) error {
 	defer di.mu.Unlock()
 	deletePolicy := metav1.DeletePropagationForeground
 
-	if err := deploymentsClient.Delete(context.TODO(), di.AppName, metav1.DeleteOptions{
+	// TODO: spin until this actually finishes terminating
+	if err := client.Delete(context.TODO(), di.Namespace, metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,
 	}); err != nil {
-		return fmt.Errorf("failed to delete deployment %s: %v", di.AppName, err)
+		return fmt.Errorf("failed to delete namespace %s: %v", di.Namespace, err)
 	}
 
 	di.State = Destroyed
@@ -208,21 +230,31 @@ func getSelector(appName, teamId string) *metav1.LabelSelector {
 	}
 }
 
-func getNamespace()
+// get the namespace struct for the deployment
+func getNamespace(name, teamId string) *corev1.Namespace {
+	return &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"chaldeploy.captaingee.ch/chal":       HashString(config.ChallengeName),
+				"chaldeploy.captaingee.ch/team-id":    teamId,
+				"chaldeploy.captaingee.ch/managed-by": "yes",
+			},
+		},
+	}
+}
 
 // get the deployment struct for the target app
-func getDeployment(appName, teamName, teamId string) appsv1.Deployment {
+func getDeployment(appName, teamId string) *appsv1.Deployment {
 	selector := getSelector(appName, teamId)
 
-	deployment := appsv1.Deployment{
+	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: appName,
 			Labels: map[string]string{
-				"app":                                appName,
-				"chaldeploy.captaingee.ch/chal-name": config.ChallengeName,
-				"chaldeploy.captaingee.ch/target":    "yes",
-				"chaldeploy.captaingee.ch/team-name": teamName,
-				"chaldeploy.captaingee.ch/team-id":   teamId,
+				"app":                              appName,
+				"chaldeploy.captaingee.ch/chal":    HashString(config.ChallengeName),
+				"chaldeploy.captaingee.ch/team-id": teamId,
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
@@ -230,11 +262,9 @@ func getDeployment(appName, teamName, teamId string) appsv1.Deployment {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app":                                appName,
-						"chaldeploy.captaingee.ch/chal-name": config.ChallengeName,
-						"chaldeploy.captaingee.ch/target":    "yes",
-						"chaldeploy.captaingee.ch/team-name": teamName,
-						"chaldeploy.captaingee.ch/team-id":   teamId,
+						"app":                              appName,
+						"chaldeploy.captaingee.ch/chal":    HashString(config.ChallengeName),
+						"chaldeploy.captaingee.ch/team-id": teamId,
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -256,8 +286,6 @@ func getDeployment(appName, teamName, teamId string) appsv1.Deployment {
 			},
 		},
 	}
-
-	return deployment
 }
 
 // Identify the proper source for the cluster config and load it

@@ -42,12 +42,6 @@ func (h sessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-/*
-can do an in memory map to track team info and deployment status. on startup, go to k8s and populate the map
-this means that there can only be one instance of this running, and also have to use locks on the map
-easier than doing a db though
-*/
-
 func main() {
 	// load config
 	if c, err := loadConfig(); err != nil {
