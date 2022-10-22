@@ -57,6 +57,9 @@ type DeploymentInstance struct {
 	// value for the `app` label
 	AppName string
 
+	// k8s namespace used for the instance
+	Namespace string
+
 	// expiration time for the instance
 	// ExpTime string
 
@@ -88,9 +91,6 @@ type InstanceManager struct {
 	Lock *sync.RWMutex
 
 	// map of team id -> instance
-	// key should be a string
-	// value should be a *DeploymentInstance
-	// Instances sync.Map
 	Instances *generic_map.MapOf[string, *DeploymentInstance]
 }
 
@@ -125,37 +125,101 @@ func (im *InstanceManager) Init() error {
 //   - https://github.com/kubernetes/client-go/blob/master/examples/in-cluster-client-configuration/main.go
 //   - https://github.com/kubernetes/client-go/blob/master/examples/create-update-delete-deployment/main.go
 func (im *InstanceManager) CreateDeployment(teamName, teamId string) (string, error) {
-	appName := strings.ToLower(fmt.Sprintf("chaldeploy-app-%s", teamName))
+	// compute a unique identifer for this deployment
+	uniqName := strings.ToLower(fmt.Sprintf("chaldeploy-%s-%s", HashString(config.ChallengeName), strings.ReplaceAll(teamId, "-", "")))
 
-	deployment := getDeployment(appName, teamName, teamId)
+	// initialize the Deployment Instance
+	di := DeploymentInstance{
+		AppName:   uniqName,
+		Namespace: uniqName,
+		State:     Destroyed,
+	}
 
-	deploymentsClient := im.Clientset.AppsV1().Deployments(corev1.NamespaceDefault)
+	// get the k8s deployment object
+	// TODO: get the other k8s objects
+	deployment := getDeployment(di.AppName, teamName, teamId)
+
+	// create the k8s objects
+	deploymentsClient := im.Clientset.AppsV1().Deployments(di.Namespace)
 	_, err := deploymentsClient.Create(context.TODO(), &deployment, metav1.CreateOptions{})
 	if err != nil {
 		panic(err)
 	}
 
-	return "", nil
+	// save the instance
+	di.State = Running
+	im.Instances.Store(teamId, &di)
+
+	return "1.2.3.4:9999", nil
+}
+
+// Destroy a challenge deployment
+func (im *InstanceManager) DestroyDeployment(teamId string) error {
+	// get a ptr to the instance
+	di, ok := im.Instances.Load(teamId)
+	if !ok || di == nil {
+		return fmt.Errorf("tried to destroy a non-exist deployment for %s", teamId)
+	}
+
+	if di.State == Destroying {
+		// deployment is in the process of being destroyed, don't try to destroy it again
+		return nil
+	}
+
+	// acquire the lock on the deployment and mark it as being destroyed
+	di.mu.Lock()
+	di.State = Destroying
+	di.mu.Unlock()
+
+	// init clients in the right namespace
+	deploymentsClient := im.Clientset.AppsV1().Deployments(di.Namespace)
+
+	// check if the resource exists, exit if it doesn't
+	if deployment, err := deploymentsClient.Get(context.TODO(), di.AppName, metav1.GetOptions{}); err != nil || deployment == nil {
+		// TODO: investigate how err can be set (e.g., failed to lookup vs successfully looked up and confirmed non-existent)
+		return nil
+	}
+
+	// delete resources
+	di.mu.Lock()
+	defer di.mu.Unlock()
+	deletePolicy := metav1.DeletePropagationForeground
+
+	if err := deploymentsClient.Delete(context.TODO(), di.AppName, metav1.DeleteOptions{
+		PropagationPolicy: &deletePolicy,
+	}); err != nil {
+		return fmt.Errorf("failed to delete deployment %s: %v", di.AppName, err)
+	}
+
+	di.State = Destroyed
+
+	return nil
 }
 
 /////////////////////////////////
 
 // get a labelselector object that can be used for the deployment and service objects
-func getSelector(appName string) *metav1.LabelSelector {
+func getSelector(appName, teamId string) *metav1.LabelSelector {
 	return &metav1.LabelSelector{
-		MatchLabels: map[string]string{"app": appName},
+		MatchLabels: map[string]string{
+			"app":                              appName,
+			"chaldeploy.captaingee.ch/team-id": teamId,
+		},
 	}
 }
 
+func getNamespace()
+
 // get the deployment struct for the target app
 func getDeployment(appName, teamName, teamId string) appsv1.Deployment {
-	selector := getSelector(appName)
+	selector := getSelector(appName, teamId)
 
 	deployment := appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: appName,
 			Labels: map[string]string{
 				"app":                                appName,
+				"chaldeploy.captaingee.ch/chal-name": config.ChallengeName,
 				"chaldeploy.captaingee.ch/target":    "yes",
 				"chaldeploy.captaingee.ch/team-name": teamName,
 				"chaldeploy.captaingee.ch/team-id":   teamId,
@@ -165,7 +229,13 @@ func getDeployment(appName, teamName, teamId string) appsv1.Deployment {
 			Selector: selector,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": appName},
+					Labels: map[string]string{
+						"app":                                appName,
+						"chaldeploy.captaingee.ch/chal-name": config.ChallengeName,
+						"chaldeploy.captaingee.ch/target":    "yes",
+						"chaldeploy.captaingee.ch/team-name": teamName,
+						"chaldeploy.captaingee.ch/team-id":   teamId,
+					},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{

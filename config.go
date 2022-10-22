@@ -10,7 +10,6 @@ import (
 
 type Config struct {
 	// $CHALDEPLOY_NAME: Name of the challenge to deploy
-	// TODO: render this on the webpage
 	ChallengeName string `env:"CHALDEPLOY_NAME"`
 
 	// $CHALDEPLOY_PORT: Port exposed by the challenge, must be 1-65535

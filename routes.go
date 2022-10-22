@@ -182,17 +182,21 @@ func createInstanceRequest(w http.ResponseWriter, r *http.Request, s *sessions.S
 
 	log.Printf("Deploying instance for %s (ID: %s)\n", s.Values["teamName"], s.Values["id"])
 
-	// TODO: create instance and store in memcache
+	// create the deployment
+	cxn, err := im.CreateDeployment(s.Values["teamName"].(string), s.Values["id"].(string))
+	if err != nil {
+		log.Printf("couldn't create a deployment for %s: %v", s.Values["teamName"], err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	resp := CreateInstanceResponse{Host: "1.2.3.4:8989"}
+	resp := CreateInstanceResponse{Host: cxn}
 	respBytes, err := json.Marshal(resp)
 	if err != nil {
 		log.Printf("error handling create instance request, couldn't marshal response data: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	created = true
 
 	w.Header().Add("Content-type", "application/json")
 	w.Write(respBytes)

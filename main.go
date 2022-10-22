@@ -73,6 +73,7 @@ func main() {
 	}
 
 	// setup router
+	// TODO: admin route to look for things stuck in "Destroying" state
 	router.Use(loggingMiddleware)
 	router.HandleFunc("/", indexPage).Methods("GET")
 	router.HandleFunc("/healthcheck", healthCheck).Methods("GET")
