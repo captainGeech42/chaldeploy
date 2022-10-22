@@ -2,7 +2,10 @@ package main
 
 import (
 	"encoding/json"
-	"html/template"
+	// deliberately using this instead of html/template to leave html comments in more easily.
+	// templated data is not user controlled
+	"text/template"
+
 	"io"
 	"net/http"
 	"net/url"
