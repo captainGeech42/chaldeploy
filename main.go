@@ -21,7 +21,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		log.Printf("%s request from %s to %s\n", r.Method, r.RemoteAddr, r.RequestURI)
+		log.Printf("%s request from %s to %s", r.Method, r.RemoteAddr, r.RequestURI)
 
 		next.ServeHTTP(w, r)
 	})
@@ -55,7 +55,7 @@ func main() {
 
 	// initialize session store
 	if sessKeyLen := len(config.SessionKey); !Contains([]int{32, 64}, sessKeyLen) {
-		log.Fatalf("the session key is an invalid length: %d (must be 32 or 64)\n", sessKeyLen)
+		log.Fatalf("the session key is an invalid length: %d (must be 32 or 64)", sessKeyLen)
 	}
 	store = sessions.NewCookieStore([]byte(config.SessionKey))
 	store.Options.SameSite = http.SameSiteStrictMode
@@ -63,7 +63,7 @@ func main() {
 	// initialize instance manager
 	im = &InstanceManager{}
 	if err := im.Init(); err != nil {
-		log.Fatalf("couldn't init InstanceManager: %v\n", err)
+		log.Fatalf("couldn't init InstanceManager: %v", err)
 	}
 
 	// setup router

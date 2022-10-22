@@ -119,7 +119,33 @@ func (im *InstanceManager) Init() error {
 	// initialize the map
 	im.Instances = new(generic_map.MapOf[string, *DeploymentInstance])
 
-	// TODO: go through the k8s namespaces and identify what is running
+	// get the chaldeploy namespaces for this challenge
+	namespaceClient := im.Clientset.CoreV1().Namespaces()
+	cdNamespaces, err := namespaceClient.List(context.TODO(), metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("chaldeploy.captaingee.ch/managed-by=yes,chaldeploy.captaingee.ch/chal=%s", HashString(config.ChallengeName)),
+	})
+	if err != nil {
+		return err
+	}
+
+	if l := len(cdNamespaces.Items); l > 0 {
+		log.Printf("found %d existing deployment(s) while initializing InstanceManager, ingesting them", l)
+	}
+
+	for _, ns := range cdNamespaces.Items {
+		di := &DeploymentInstance{
+			AppName:   ns.Name,
+			Namespace: ns.Name,
+			State:     Running,
+			mu:        &sync.Mutex{},
+		}
+
+		teamId := ns.Labels["chaldeploy.captaingee.ch/team-id"]
+
+		// TODO: get the cxn info to save in di
+
+		im.Instances.Store(teamId, di)
+	}
 
 	return nil
 }
@@ -225,6 +251,7 @@ func getSelector(appName, teamId string) *metav1.LabelSelector {
 	return &metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			"app":                              appName,
+			"chaldeploy.captaingee.ch/chal":    HashString(config.ChallengeName),
 			"chaldeploy.captaingee.ch/team-id": teamId,
 		},
 	}
@@ -296,7 +323,7 @@ func getDeployment(appName, teamId string) *appsv1.Deployment {
 func getConfigForCluster() (*rest.Config, error) {
 	// check if a path to the k8s config was specified
 	if config.K8sConfigPath != "" {
-		log.Printf("using k8s config path from env var: %s\n", config.K8sConfigPath)
+		log.Printf("using k8s config path from env var: %s", config.K8sConfigPath)
 
 		// check if it exists
 		if _, err := os.Stat(config.K8sConfigPath); os.IsExist(err) {

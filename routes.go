@@ -47,7 +47,7 @@ func indexPage(w http.ResponseWriter, r *http.Request) {
 			t, err := template.ParseFiles("templates/index.html")
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				log.Printf("failed to parse index template: %v\n", err)
+				log.Printf("failed to parse index template: %v", err)
 				return
 			}
 
@@ -55,7 +55,7 @@ func indexPage(w http.ResponseWriter, r *http.Request) {
 			err = t.Execute(sb, config)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				log.Printf("failed to render index template: %v\n", err)
+				log.Printf("failed to render index template: %v", err)
 				return
 			}
 
@@ -86,13 +86,16 @@ func authRequest(w http.ResponseWriter, r *http.Request, s *sessions.Session) {
 
 	bodyStr := string(body)
 	parts := strings.Split(bodyStr, "/login?token=")
-	loginTokenEncoded := parts[len(parts)-1]
+	loginToken := parts[len(parts)-1]
 
-	loginToken, err := url.QueryUnescape(loginTokenEncoded)
-	if err != nil {
-		log.Printf("error handling client auth, couldn't decode login token: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+	// check if the token is url encoded, and decode if so
+	if strings.Contains(loginToken, "%") {
+		loginToken, err = url.QueryUnescape(loginToken)
+		if err != nil {
+			log.Printf("error handling client auth, couldn't decode login token: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 
 	authToken, err := authToRctf(loginToken)
@@ -181,7 +184,7 @@ func createInstanceRequest(w http.ResponseWriter, r *http.Request, s *sessions.S
 		return
 	}
 
-	log.Printf("Deploying instance for %s (ID: %s)\n", s.Values["teamName"], s.Values["id"])
+	log.Printf("Deploying instance for %s (ID: %s)", s.Values["teamName"], s.Values["id"])
 
 	// create the deployment
 	cxn, err := im.CreateDeployment(s.Values["id"].(string))
@@ -213,7 +216,7 @@ func extendInstanceRequest(w http.ResponseWriter, r *http.Request, s *sessions.S
 		return
 	}
 
-	log.Printf("Extending instance for %s (ID: %s)\n", s.Values["teamName"], s.Values["id"])
+	log.Printf("Extending instance for %s (ID: %s)", s.Values["teamName"], s.Values["id"])
 
 	// TODO: extend instance and update memcache
 
@@ -231,7 +234,7 @@ func destroyInstanceRequest(w http.ResponseWriter, r *http.Request, s *sessions.
 		return
 	}
 
-	log.Printf("Destroying instance for %s (ID: %s)\n", s.Values["teamName"], s.Values["id"])
+	log.Printf("Destroying instance for %s (ID: %s)", s.Values["teamName"], s.Values["id"])
 
 	if err := im.DestroyDeployment(s.Values["id"].(string)); err != nil {
 		log.Printf("error handling delete instance request, couldn't delete deployment: %v", err)
