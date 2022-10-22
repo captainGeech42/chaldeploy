@@ -35,6 +35,8 @@ func indexPage(w http.ResponseWriter, r *http.Request) {
 
 		// index hasn't been rendered yet. lock the resource and render it
 		cachedIndexLock.Lock()
+		defer cachedIndexLock.Unlock()
+
 		if cachedIndex == "" {
 			// why do we check it again? good question, smart reader who is smarter than the dingdong who wrote this
 			// method! i think its possible for a second caller of this function to get into this code path by
@@ -63,8 +65,6 @@ func indexPage(w http.ResponseWriter, r *http.Request) {
 		} else {
 			log.Println("index page got rendered for me, yeet")
 		}
-
-		cachedIndexLock.Unlock()
 	}
 
 	w.Write([]byte(cachedIndex))
