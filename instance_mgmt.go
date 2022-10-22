@@ -106,7 +106,7 @@ func (im *InstanceManager) Init() error {
 	}
 
 	// create the clientset
-	clientset, err := kubernetes.NewForConfig(k8sConfig)
+	clientset, err := kubernetes.NewForConfig(im.Config)
 	if err != nil {
 		return err
 	} else {
@@ -243,9 +243,9 @@ func getConfigForCluster() (*rest.Config, error) {
 			// use the current context in kubeconfig
 			k8sConfig, err := clientcmd.BuildConfigFromFlags("", configPath)
 			if err != nil {
-				return k8sConfig, nil
-			} else {
 				return nil, err
+			} else {
+				return k8sConfig, nil
 			}
 		}
 	}

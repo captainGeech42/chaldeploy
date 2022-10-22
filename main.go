@@ -74,6 +74,7 @@ func main() {
 
 	// setup router
 	router.Use(loggingMiddleware)
+	router.HandleFunc("/", indexPage).Methods("GET")
 	router.HandleFunc("/healthcheck", healthCheck).Methods("GET")
 	router.Path("/api/auth").Handler(sessionHandler(authRequest)).Methods("POST")
 	router.Path("/api/status").Handler(sessionHandler(statusRequest)).Methods("GET")

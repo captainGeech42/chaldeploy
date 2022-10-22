@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"html/template"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
 	"log"
 
@@ -13,6 +15,57 @@ import (
 )
 
 var created bool = false
+
+// don't flame me, i'm lazy
+var cachedIndex = ""
+var cachedIndexLock sync.Mutex
+
+func indexPage(w http.ResponseWriter, r *http.Request) {
+	if config == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("indexPage was called before config was set, can't render template")
+	}
+
+	// check if the index has been rendered yet
+	if cachedIndex == "" {
+		log.Println("need to render the index page")
+
+		// index hasn't been rendered yet. lock the resource and render it
+		cachedIndexLock.Lock()
+		if cachedIndex == "" {
+			// why do we check it again? good question, smart reader who is smarter than the dingdong who wrote this
+			// method! i think its possible for a second caller of this function to get into this code path by
+			// getting blocked waiting for the lock, and we don't want them to re-render the template if they don't
+			// need to. so, allow them to bail out and prevent re-rendering. stupid? yes. works? probably. need it?
+			// not a clue. have fun.
+
+			log.Println("actually rendering the index page")
+
+			t, err := template.ParseFiles("templates/index.html")
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				log.Printf("failed to parse index template: %v\n", err)
+				return
+			}
+
+			sb := &strings.Builder{}
+			err = t.Execute(sb, config)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				log.Printf("failed to render index template: %v\n", err)
+				return
+			}
+
+			cachedIndex = sb.String()
+		} else {
+			log.Println("index page got rendered for me, yeet")
+		}
+
+		cachedIndexLock.Unlock()
+	}
+
+	w.Write([]byte(cachedIndex))
+}
 
 // GET /healthcheck
 func healthCheck(w http.ResponseWriter, r *http.Request) {
