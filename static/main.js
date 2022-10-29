@@ -57,6 +57,10 @@ function toggleStateButtons(isActive) {
 }
 
 // Show a toast notification via Bootstrap
+// TODO: have a default toast hidden in the dom, clone it and push it to a div or smth
+// show that one
+// that way, we can have multiple toasts b/f one times out
+// add a handler once its finished disappearing to remove it from the dom
 function showNotice(text) {
     toast = bootstrap.Toast.getOrCreateInstance(ELEMS.toastDiv);
     ELEMS.toastBody.innerText = text;
