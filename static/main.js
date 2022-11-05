@@ -7,8 +7,9 @@ ELEMS = {
     authStatus: document.getElementById("span-auth-status"),
     instanceStatus: document.getElementById("span-instance-status"),
     rctfAuthUrlField: document.getElementById("ta-rctf-auth-url"),
-    toastDiv: document.getElementById("notice-toast"),
-    toastBody: document.getElementById("notice-toast-body")
+    toastContainer: document.getElementById("toast-container"),
+    noticeToast: document.getElementById("notice-toast"),
+    errorToast: document.getElementById("error-toast"),
 }
 
 // Enable a button to be clicked
@@ -56,16 +57,34 @@ function toggleStateButtons(isActive) {
     }
 }
 
-// Show a toast notification via Bootstrap
-// TODO: have a default toast hidden in the dom, clone it and push it to a div or smth
-// show that one
-// that way, we can have multiple toasts b/f one times out
-// add a handler once its finished disappearing to remove it from the dom
-function showNotice(text) {
-    toast = bootstrap.Toast.getOrCreateInstance(ELEMS.toastDiv);
-    ELEMS.toastBody.innerText = text;
+// Launch a toast
+function showToast(targetToast, text) {
+    // make the toast element
+    const newToast = targetToast.cloneNode(true);
+    newToast.id = `toast-${crypto.randomUUID()}`;
 
-    toast.show();
+    // set the body
+    newToast.getElementsByClassName("toast-body")[0].innerText = text;
+
+    // setup the cleanup callback
+    newToast.addEventListener("hidden.bs.toast", (e) => {
+        e.target.parentNode.removeChild(e.target);
+    });
+
+    // render it
+    ELEMS.toastContainer.appendChild(newToast);
+    toastObj = bootstrap.Toast.getOrCreateInstance(newToast);
+    toastObj.show();
+}
+
+// Show a notice-level toast notification via Bootstrap
+function showNoticeToast(text) {
+    showToast(ELEMS.noticeToast, text);
+}
+
+// Show an error-level toast notification via Bootstrap
+function showErrorToast(text) {
+    showToast(ELEMS.errorToast, text);
 }
 
 // Handler for when the contents of the auth url field change
@@ -86,14 +105,17 @@ function onAuthenticate(e) {
         body: ELEMS.rctfAuthUrlField.value
     }).then(r => {
         if (r.status === 403) {
+            showErrorToast("Couldn't auth");
             statusError(ELEMS.authStatus, "Couldn't auth to rCTF, bad token/URL?");
         } else if (r.status >= 400) {
+            showErrorToast("Couldn't auth");
             statusError(ELEMS.authStatus, "Server error, contact an @Admin");
         } else {
             return r.text();
         }
     }).then(teamName => {
         if (teamName) {
+            showNoticeToast("Authenticated");
             statusSuccess(ELEMS.authStatus, `Authenticated as ${teamName}`);
             disableButton(ELEMS.auth);
             ELEMS.rctfAuthUrlField.readOnly = true;
@@ -111,8 +133,10 @@ function getInstanceStatus() {
     fetch("/api/status")
         .then(r => {
             if (r.status === 403) {
+                showErrorToast("Couldn't get instance status");
                 statusError(ELEMS.authStatus, "Please refresh the page and re-authenticate");
             } else if (r.status >= 400) {
+                showErrorToast("Couldn't get instance status");
                 statusError(ELEMS.instanceStatus, "Server error, contact an @Admin");
             } else {
                 return r.json()
@@ -141,11 +165,13 @@ function onCreate(e) {
     fetch("/api/create", { method: "POST" })
         .then(r => {
             if (r.status === 403) {
+                showErrorToast("Couldn't create instance");
                 statusError(ELEMS.authStatus, "Please refresh the page and re-authenticate");
             } else if (r.status >= 400) {
+                showErrorToast("Couldn't create instance");
                 statusError(ELEMS.instanceStatus, "Server error, contact an @Admin");
             } else {
-                showNotice("Successfully created instance");
+                showNoticeToast("Instance created");
                 getInstanceStatus();
             }
         });
@@ -158,8 +184,10 @@ function onExtend(e) {
     fetch("/api/extend", { method: "POST" })
         .then(r => {
             if (r.status === 403) {
+                showErrorToast("Couldn't extend instance");
                 statusError(ELEMS.authStatus, "Please refresh the page and re-authenticate");
             } else if (r.status >= 400) {
+                showErrorToast("Couldn't extend instance");
                 statusError(ELEMS.instanceStatus, "Server error, contact an @Admin");
             } else {
                 return r.text();
@@ -167,7 +195,7 @@ function onExtend(e) {
         })
         .then(data => {
             if (data) {
-                showNotice("Successfully extended instance lifetime");
+                showNoticeToast("Instance lifetime extended");
                 getInstanceStatus();
             }
         });
@@ -180,11 +208,13 @@ function onDestroy(e) {
     fetch("/api/destroy", { method: "POST" })
         .then(r => {
             if (r.status === 403) {
+                showErrorToast("Couldn't destroy instance");
                 statusError(ELEMS.authStatus, "Please refresh the page and re-authenticate");
             } else if (r.status >= 400) {
+                showErrorToast("Couldn't destroy instance");
                 statusError(ELEMS.instanceStatus, "Server error, contact an @Admin");
             } else {
-                showNotice("Successfully destroyed instance");
+                showNoticeToast("Instance destroyed");
                 getInstanceStatus();
             }
         });
