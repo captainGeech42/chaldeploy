@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 )
+
+// how long an instance will run, or how much time will be added to the expiration
+const INSTANCE_RUNTIME = time.Duration(5) * time.Minute
 
 type InstanceState int64
 
@@ -64,7 +68,7 @@ type DeploymentInstance struct {
 	Namespace string
 
 	// expiration time for the instance
-	// ExpTime string
+	ExpTime *time.Time
 
 	// the current state of the instance
 	State InstanceState
@@ -152,6 +156,16 @@ func (im *InstanceManager) Init() error {
 
 			teamId := ns.Labels["chaldeploy.captaingee.ch/team-id"]
 
+			// get the expiration time for the deployment instance
+			if expTimeInt, err := strconv.Atoi(ns.Labels["chaldeploy.captaingee.ch/expiration-time"]); err != nil {
+				log.Printf("couldn't parse expiration time for %s as int, setting 1hr expiration: %s", ns.Name, ns.Labels["chaldeploy.captaingee.ch/expiration-time"])
+				expTime := time.Now().UTC().Add(INSTANCE_RUNTIME)
+				di.ExpTime = &expTime
+			} else {
+				expTime := time.Unix(int64(expTimeInt), 0).UTC()
+				di.ExpTime = &expTime
+			}
+
 			// get the connection info
 			servicesClient := clientset.CoreV1().Services(di.Namespace)
 			if service, err := servicesClient.Get(context.TODO(), di.AppName, metav1.GetOptions{}); err == nil {
@@ -201,9 +215,16 @@ func (im *InstanceManager) CreateDeployment(teamId string) (string, error) {
 	defer di.mu.Unlock()
 	if di.State == Destroyed {
 		// get the k8s objects
+		// TODO: create the other necessary resources ref rcds
 		namespace := getNamespace(uniqName, teamId)
 		deployment := getDeployment(di.AppName, teamId)
 		service := getService(di.AppName, teamId)
+
+		// set the expiration time
+		now := time.Now().UTC()
+		expTime := now.Add(INSTANCE_RUNTIME)
+		namespace.ObjectMeta.Labels["chaldeploy.captaingee.ch/expiration-time"] = strconv.Itoa(int(expTime.Unix()))
+		di.ExpTime = &expTime
 
 		// create the k8s objects
 		namespaceClient := im.Clientset.CoreV1().Namespaces()
@@ -246,6 +267,43 @@ func (im *InstanceManager) GetDeploymentInstance(teamId string) *DeploymentInsta
 	return di
 }
 
+// Extend the expiration time of a deployment by 1hr
+// Returns the new expiration time
+func (im *InstanceManager) ExtendDeployment(teamId string) (string, error) {
+	// get a ptr to the instance
+	di, ok := im.Instances.Load(teamId)
+	if !ok || di == nil {
+		return "", fmt.Errorf("tried to extend a non-exist deployment for %s", teamId)
+	}
+
+	// validate state
+	if di.State != Running {
+		return "", fmt.Errorf("tried to extend a non-running deployment for %s (current state: %s)", teamId, di.State)
+	}
+
+	if di.ExpTime.Before(time.Now().UTC()) {
+		return "", fmt.Errorf("tried to extend an already expired deployment for %s (exp time: %s)", teamId, di.GetExpTime())
+	}
+
+	// update the di instance
+	newExp := di.ExpTime.Add(INSTANCE_RUNTIME)
+	di.ExpTime = &newExp
+
+	// update the namespace label
+	namespacesClient := im.Clientset.CoreV1().Namespaces()
+	ns, err := namespacesClient.Get(context.TODO(), di.Namespace, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("couldn't get namespace object from k8s to extend instance for %s", teamId)
+	}
+
+	ns.ObjectMeta.Labels["chaldeploy.captaingee.ch/expiration-time"] = strconv.Itoa(int(newExp.Unix()))
+	if _, err := namespacesClient.Update(context.TODO(), ns, metav1.UpdateOptions{}); err != nil {
+		return "", fmt.Errorf("couldn't update namespace in k8s to extend instance for %s", teamId)
+	}
+
+	return di.GetExpTime(), nil
+}
+
 // Destroy a challenge deployment
 func (im *InstanceManager) DestroyDeployment(teamId string) error {
 	// get a ptr to the instance
@@ -254,8 +312,32 @@ func (im *InstanceManager) DestroyDeployment(teamId string) error {
 		return fmt.Errorf("tried to destroy a non-exist deployment for %s", teamId)
 	}
 
-	if di.State == Destroying {
-		// deployment is in the process of being destroyed, don't try to destroy it again
+	return di.DestroyInstance()
+}
+
+func (im *InstanceManager) DestroyExpiredInstances() error {
+	var retErr error = nil
+
+	now := time.Now().UTC()
+
+	im.Instances.Range(func(key string, value *DeploymentInstance) bool {
+		if value.ExpTime != nil && value.ExpTime.Before(now) {
+			if err := value.DestroyInstance(); err != nil {
+				retErr = err
+				return false
+			}
+		}
+
+		return true
+	})
+
+	return retErr
+}
+
+// destroy a deployment
+func (di *DeploymentInstance) DestroyInstance() error {
+	if di.State != Running {
+		// deployment isn't running, probably already being destroyed, don't try to destroy it again
 		return nil
 	}
 
@@ -278,7 +360,6 @@ func (im *InstanceManager) DestroyDeployment(teamId string) error {
 	defer di.mu.Unlock()
 	deletePolicy := metav1.DeletePropagationForeground
 
-	// TODO: spin until this actually finishes terminating
 	if err := client.Delete(context.TODO(), di.Namespace, metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,
 	}); err != nil {
@@ -292,6 +373,7 @@ func (im *InstanceManager) DestroyDeployment(teamId string) error {
 	di.State = Destroyed
 
 	return nil
+
 }
 
 // Expontential backoff spin until the deployment service has an external IP assigned
@@ -348,6 +430,15 @@ func (di *DeploymentInstance) BlockUntilTerminated(wait int, maxTries int) bool 
 
 		time.Sleep(time.Duration(math.Pow(2, float64(counter))) * time.Second)
 	}
+}
+
+// Get a human readable string for the expiration time of a deployment
+func (di *DeploymentInstance) GetExpTime() string {
+	if di.ExpTime == nil {
+		return "<unknown>"
+	}
+
+	return di.ExpTime.Format("2006-01-02 15:04:05 UTC")
 }
 
 /////////////////////////////////
@@ -459,7 +550,7 @@ func getService(appName, teamId string) *corev1.Service {
 func getConfigForCluster() (*rest.Config, error) {
 	// check if a path to the k8s config was specified
 	if config.K8sConfigPath != "" {
-		log.Printf("using k8su config path from env var: %s", config.K8sConfigPath)
+		log.Printf("using k8s config path from env var: %s", config.K8sConfigPath)
 
 		// check if it exists
 		if _, err := os.Stat(config.K8sConfigPath); os.IsExist(err) {

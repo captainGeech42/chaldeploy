@@ -63,6 +63,8 @@ kubectl apply -f deployment.yaml
 
 [src](https://gitlab.com/osusec/ctf-authors/damctf2020-chals/-/tree/master/test/test-nc)
 
+dockerhub: `captaingeech/test-nc:latest`, exposes on 31337/tcp
+
 ```
 docker build -t test-nc:v2
 minikube image load test-nc:v2

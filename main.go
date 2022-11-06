@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -66,7 +67,17 @@ func main() {
 		log.Fatalf("couldn't init InstanceManager: %v", err)
 	}
 
-	// TODO goroutine to destroy timed out instances
+	// start background thread to destroy expired instances
+	go func(im *InstanceManager) {
+		for {
+			if err := im.DestroyExpiredInstances(); err != nil {
+				log.Printf("couldn't destroy expired instances: %v", err)
+				return
+			}
+
+			time.Sleep(time.Duration(1) * time.Minute)
+		}
+	}(im)
 
 	// setup router
 	// TODO: admin route to look for things stuck in "Destroying" state

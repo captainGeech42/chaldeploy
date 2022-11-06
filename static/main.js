@@ -145,7 +145,7 @@ function getInstanceStatus() {
         .then(data => {
             if (data) {
                 if (data?.state === "active") {
-                    statusSuccess(ELEMS.instanceStatus, `Active instance available at ${data?.host}, expires at $TIME`);
+                    statusSuccess(ELEMS.instanceStatus, `Active instance available at ${data?.host}, expires at ${data?.expTime}`);
                     toggleStateButtons(true);
                 } else if (data?.state === "inactive") {
                     statusInfo(ELEMS.instanceStatus, "No active instance");

@@ -135,9 +135,9 @@ func authRequest(w http.ResponseWriter, r *http.Request, s *sessions.Session) {
 }
 
 type StatusResponse struct {
-	State string `json:"state"` // "active" || "inactive"
-	Host  string `json:"host,omitempty"`
-	// ExpTime
+	State   string `json:"state"` // "active" || "inactive"
+	Host    string `json:"host,omitempty"`
+	ExpTime string `json:"expTime,omitempty"`
 }
 
 // GET /api/status
@@ -155,7 +155,7 @@ func statusRequest(w http.ResponseWriter, r *http.Request, s *sessions.Session) 
 	var resp StatusResponse
 
 	if di != nil && di.State == Running {
-		resp = StatusResponse{State: "active", Host: di.GetCxn()}
+		resp = StatusResponse{State: "active", Host: di.GetCxn(), ExpTime: di.GetExpTime()}
 	} else {
 		resp = StatusResponse{State: "inactive"}
 	}
@@ -172,7 +172,6 @@ func statusRequest(w http.ResponseWriter, r *http.Request, s *sessions.Session) 
 
 type CreateInstanceResponse struct {
 	Host string `json:"host"` // host:port string
-	// ExpTime
 }
 
 // POST /api/create
@@ -218,10 +217,15 @@ func extendInstanceRequest(w http.ResponseWriter, r *http.Request, s *sessions.S
 
 	log.Printf("Extending instance for %s (ID: %s)", s.Values["teamName"], s.Values["id"])
 
-	// TODO: extend instance and update memcache
+	newExp, err := im.ExtendDeployment(s.Values["id"].(string))
+	if err != nil {
+		log.Printf("couldn't extend deployment for %s: %v", s.Values["teamName"], err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Add("Content-type", "text/plain")
-	w.Write([]byte("2022-01-01 12:34:56"))
+	w.Write([]byte(newExp))
 }
 
 // POST /api/destroy
