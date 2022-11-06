@@ -468,6 +468,7 @@ func getNamespace(name, teamId string) *corev1.Namespace {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
 			Labels: map[string]string{
+				"app.kubernetes.io/managed-by":        "chaldeploy",
 				"chaldeploy.captaingee.ch/chal":       HashString(config.ChallengeName),
 				"chaldeploy.captaingee.ch/team-id":    teamId,
 				"chaldeploy.captaingee.ch/managed-by": "yes",
@@ -480,11 +481,14 @@ func getNamespace(name, teamId string) *corev1.Namespace {
 func getDeployment(appName, teamId string) *appsv1.Deployment {
 	selector := getSelector(appName, teamId)
 
+	b := false
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: appName,
 			Labels: map[string]string{
 				"app":                              appName,
+				"app.kubernetes.io/managed-by":     "chaldeploy",
 				"chaldeploy.captaingee.ch/chal":    HashString(config.ChallengeName),
 				"chaldeploy.captaingee.ch/team-id": teamId,
 			},
@@ -495,16 +499,19 @@ func getDeployment(appName, teamId string) *appsv1.Deployment {
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
 						"app":                              appName,
+						"app.kubernetes.io/managed-by":     "chaldeploy",
 						"chaldeploy.captaingee.ch/chal":    HashString(config.ChallengeName),
 						"chaldeploy.captaingee.ch/team-id": teamId,
 					},
 				},
 				Spec: corev1.PodSpec{
+					AutomountServiceAccountToken: &b,
 					Containers: []corev1.Container{
 						{
 							Name:  getImageName(config.ChallengeImage),
 							Image: config.ChallengeImage,
 							Ports: []corev1.ContainerPort{{ContainerPort: int32(config.ChallengePort)}},
+
 							// Resources: corev1.ResourceRequirements{
 							// 	Limits: corev1.ResourceList{
 							// 		corev1.ResourceCPU:    resource.MustParse("500m"), // TODO: configify these
@@ -528,6 +535,7 @@ func getService(appName, teamId string) *corev1.Service {
 			Name: appName,
 			Labels: map[string]string{
 				"app":                              appName,
+				"app.kubernetes.io/managed-by":     "chaldeploy",
 				"chaldeploy.captaingee.ch/chal":    HashString(config.ChallengeName),
 				"chaldeploy.captaingee.ch/team-id": teamId,
 			},
