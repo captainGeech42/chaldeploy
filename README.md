@@ -12,6 +12,8 @@ Web app to deploy a CTF challenge to k8s for single-team instance management
 * Automatic challenge deletion after a timeout period
   * Teams can extend this if desired
 
+**NOTE**: chaldeploy currently only supports deploying to GKE clusters.
+
 ## Usage
 
 You need to set the following environment variables:

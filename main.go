@@ -66,6 +66,8 @@ func main() {
 		log.Fatalf("couldn't init InstanceManager: %v", err)
 	}
 
+	// TODO goroutine to destroy timed out instances
+
 	// setup router
 	// TODO: admin route to look for things stuck in "Destroying" state
 	router.Use(loggingMiddleware)

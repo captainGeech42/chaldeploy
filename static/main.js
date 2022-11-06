@@ -160,7 +160,8 @@ function getInstanceStatus() {
 
 // Handler for the Create Instance button being clicked
 function onCreate(e) {
-    statusInfo(ELEMS.instanceStatus, "(creating instance...)");
+    statusInfo(ELEMS.instanceStatus, "(creating instance, may take a few minutes...)");
+    disableButton(ELEMS.create);
     
     fetch("/api/create", { method: "POST" })
         .then(r => {
@@ -180,6 +181,8 @@ function onCreate(e) {
 // Handler for the Extend Instance button being clicked
 function onExtend(e) {
     statusInfo(ELEMS.instanceStatus, "(extending instance...)");
+    disableButton(ELEMS.extend);
+    disableButton(ELEMS.destroy);
     
     fetch("/api/extend", { method: "POST" })
         .then(r => {
@@ -203,7 +206,9 @@ function onExtend(e) {
 
 // Handler for the Destroy Instance button being clicked
 function onDestroy(e) {
-    statusInfo(ELEMS.instanceStatus, "(destroying instance...)");
+    statusInfo(ELEMS.instanceStatus, "(destroying instance, make take a few minutes...)");
+    disableButton(ELEMS.extend);
+    disableButton(ELEMS.destroy);
     
     fetch("/api/destroy", { method: "POST" })
         .then(r => {

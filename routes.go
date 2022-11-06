@@ -155,7 +155,7 @@ func statusRequest(w http.ResponseWriter, r *http.Request, s *sessions.Session) 
 	var resp StatusResponse
 
 	if di != nil && di.State == Running {
-		resp = StatusResponse{State: "active", Host: di.Cxn}
+		resp = StatusResponse{State: "active", Host: di.GetCxn()}
 	} else {
 		resp = StatusResponse{State: "inactive"}
 	}

@@ -5,18 +5,21 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/captainGeech42/chaldeploy/internal/generic_map"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
@@ -69,8 +72,11 @@ type DeploymentInstance struct {
 	// lock for mutating the state of the instance
 	mu *sync.Mutex
 
-	// connection string to present to the team so they can use the instance
-	Cxn string
+	// hostname for connecting to the instance
+	Hostname string
+
+	// port for connecting to the instance
+	Port int
 }
 
 // implement sync.Locker on DeploymentInstance
@@ -80,6 +86,10 @@ func (di *DeploymentInstance) Lock() {
 
 func (di *DeploymentInstance) Unlock() {
 	di.mu.Unlock()
+}
+
+func (di *DeploymentInstance) GetCxn() string {
+	return fmt.Sprintf("%s:%d", di.Hostname, di.Port)
 }
 
 // InstanceManager stores the necessary data for creating and destroying challenge instances on a k8s cluster
@@ -130,21 +140,40 @@ func (im *InstanceManager) Init() error {
 
 	if l := len(cdNamespaces.Items); l > 0 {
 		log.Printf("found %d existing deployment(s) while initializing InstanceManager, ingesting them", l)
-	}
 
-	for _, ns := range cdNamespaces.Items {
-		di := &DeploymentInstance{
-			AppName:   ns.Name,
-			Namespace: ns.Name,
-			State:     Running,
-			mu:        &sync.Mutex{},
+		// store info for each valid namespace identified
+		for _, ns := range cdNamespaces.Items {
+			di := &DeploymentInstance{
+				AppName:   ns.Name,
+				Namespace: ns.Name,
+				State:     Running,
+				mu:        &sync.Mutex{},
+			}
+
+			teamId := ns.Labels["chaldeploy.captaingee.ch/team-id"]
+
+			// get the connection info
+			servicesClient := clientset.CoreV1().Services(di.Namespace)
+			if service, err := servicesClient.Get(context.TODO(), di.AppName, metav1.GetOptions{}); err == nil {
+				// found a running service, check if gcp assigned an lb to it
+				if len(service.Status.LoadBalancer.Ingress) > 0 {
+					// it did, save it
+					di.Hostname = service.Status.LoadBalancer.Ingress[0].IP
+					di.Port = config.ChallengePort
+				}
+			} else {
+				log.Printf("couldn't get service when enumerating existing deployments: %v", err)
+			}
+
+			// if we couldn't get info from the running service, fill it out as unknown
+			if di.Hostname == "" {
+				di.Hostname = "<unknown>"
+				di.Port = -1
+			}
+
+			// save the deployment
+			im.Instances.Store(teamId, di)
 		}
-
-		teamId := ns.Labels["chaldeploy.captaingee.ch/team-id"]
-
-		// TODO: get the cxn info to save in di
-
-		im.Instances.Store(teamId, di)
 	}
 
 	return nil
@@ -174,6 +203,7 @@ func (im *InstanceManager) CreateDeployment(teamId string) (string, error) {
 		// get the k8s objects
 		namespace := getNamespace(uniqName, teamId)
 		deployment := getDeployment(di.AppName, teamId)
+		service := getService(di.AppName, teamId)
 
 		// create the k8s objects
 		namespaceClient := im.Clientset.CoreV1().Namespaces()
@@ -184,13 +214,29 @@ func (im *InstanceManager) CreateDeployment(teamId string) (string, error) {
 		if _, err := deploymentsClient.Create(context.TODO(), deployment, metav1.CreateOptions{}); err != nil {
 			return "", fmt.Errorf("failed to create the deployment for %s: %v", uniqName, err)
 		}
+		servicesClient := im.Clientset.CoreV1().Services(di.Namespace)
+		if _, err := servicesClient.Create(context.TODO(), service, metav1.CreateOptions{}); err != nil {
+			return "", fmt.Errorf("failed to create the service for %s: %v", uniqName, err)
+		}
+
+		// block until deployment is finished
+		if !di.BlockUntilDeployed(20, 6) {
+			return "", fmt.Errorf("timed out waiting for challenge to finish deploying for %s", uniqName)
+		}
 
 		// update the instance state
-		di.State = Running
-		di.Cxn = "1.2.3.4:9999"
+		createdService, err := servicesClient.Get(context.TODO(), di.AppName, metav1.GetOptions{})
+		if err != nil {
+			return "", fmt.Errorf("failed to retrieve connection info for %s: %v", uniqName, err)
+		} else {
+			di.State = Running
+			di.Hostname = createdService.Status.LoadBalancer.Ingress[0].IP
+			di.Port = config.ChallengePort
+		}
+
 	}
 
-	return di.Cxn, nil
+	return di.GetCxn(), nil
 }
 
 // get the deployment instance for a team, if there is one.
@@ -239,12 +285,80 @@ func (im *InstanceManager) DestroyDeployment(teamId string) error {
 		return fmt.Errorf("failed to delete namespace %s: %v", di.Namespace, err)
 	}
 
+	if !di.BlockUntilTerminated(20, 6) {
+		return fmt.Errorf("failed to delete namespace %s: took too long to delete resource from k8s", di.Namespace)
+	}
+
 	di.State = Destroyed
 
 	return nil
 }
 
+// Expontential backoff spin until the deployment service has an external IP assigned
+// Returns true if blocked until successful deployment, otherwise false.
+func (di *DeploymentInstance) BlockUntilDeployed(wait int, maxTries int) bool {
+	client := im.Clientset.CoreV1().Services(di.Namespace)
+	counter := 0
+
+	if wait > 0 {
+		time.Sleep(time.Duration(wait) * time.Second)
+	}
+
+	for {
+		service, err := client.Get(context.TODO(), di.AppName, metav1.GetOptions{})
+		if err == nil {
+			if len(service.Status.LoadBalancer.Ingress) > 0 {
+				if service.Status.LoadBalancer.Ingress[0].IP != "" {
+					return true
+				}
+			}
+		}
+
+		counter += 1
+		if counter == maxTries {
+			return false
+		}
+
+		time.Sleep(time.Duration(math.Pow(2, float64(counter))) * time.Second)
+	}
+}
+
+// Exponential backoff spin until the deployment is terminated.
+// Returns true if blocked until successful deletion, otherwise false.
+func (di *DeploymentInstance) BlockUntilTerminated(wait int, maxTries int) bool {
+	client := im.Clientset.CoreV1().Namespaces()
+	counter := 0
+
+	if wait > 0 {
+		time.Sleep(time.Duration(wait) * time.Second)
+	}
+
+	for {
+		// namespace won't be deleted until all of the resources contained within it are terminated
+		// wait for the ns to disappear
+		_, err := client.Get(context.TODO(), di.Namespace, metav1.GetOptions{})
+		if err != nil && strings.Contains(err.Error(), " not found") {
+			return true
+		}
+
+		counter += 1
+		if counter == maxTries {
+			return false
+		}
+
+		time.Sleep(time.Duration(math.Pow(2, float64(counter))) * time.Second)
+	}
+}
+
 /////////////////////////////////
+
+// An image could be in the form of path/image:tag
+// Return just the image name. Matches [a-z0-9]([-a-z0-9]*[a-z0-9])?
+func getImageName(image string) string {
+	parts := strings.Split(image, "/")
+
+	return strings.Split(parts[len(parts)-1], ":")[0]
+}
 
 // get a labelselector object that can be used for the deployment and service objects
 func getSelector(appName, teamId string) *metav1.LabelSelector {
@@ -297,20 +411,42 @@ func getDeployment(appName, teamId string) *appsv1.Deployment {
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:            strings.Split(config.ChallengeImage, ":")[0],
-							Image:           config.ChallengeImage,
-							ImagePullPolicy: "Never", // TODO: adjust as needed off of minikube
-							Ports:           []corev1.ContainerPort{{ContainerPort: int32(config.ChallengePort)}},
-							Resources: corev1.ResourceRequirements{
-								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("500m"), // TODO: configify these
-									corev1.ResourceMemory: resource.MustParse("256Mi"),
-								},
-							},
+							Name:  getImageName(config.ChallengeImage),
+							Image: config.ChallengeImage,
+							Ports: []corev1.ContainerPort{{ContainerPort: int32(config.ChallengePort)}},
+							// Resources: corev1.ResourceRequirements{
+							// 	Limits: corev1.ResourceList{
+							// 		corev1.ResourceCPU:    resource.MustParse("500m"), // TODO: configify these
+							// 		corev1.ResourceMemory: resource.MustParse("256Mi"),
+							// 	},
+							// },
 						},
 					},
 				},
 			},
+		},
+	}
+}
+
+// get the service struct for the target app
+func getService(appName, teamId string) *corev1.Service {
+	selector := getSelector(appName, teamId)
+
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: appName,
+			Labels: map[string]string{
+				"app":                              appName,
+				"chaldeploy.captaingee.ch/chal":    HashString(config.ChallengeName),
+				"chaldeploy.captaingee.ch/team-id": teamId,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{Port: int32(config.ChallengePort), TargetPort: intstr.FromInt(config.ChallengePort), Protocol: corev1.ProtocolTCP},
+			},
+			Selector: selector.MatchLabels,
+			Type:     corev1.ServiceTypeLoadBalancer,
 		},
 	}
 }
@@ -323,7 +459,7 @@ func getDeployment(appName, teamId string) *appsv1.Deployment {
 func getConfigForCluster() (*rest.Config, error) {
 	// check if a path to the k8s config was specified
 	if config.K8sConfigPath != "" {
-		log.Printf("using k8s config path from env var: %s", config.K8sConfigPath)
+		log.Printf("using k8su config path from env var: %s", config.K8sConfigPath)
 
 		// check if it exists
 		if _, err := os.Stat(config.K8sConfigPath); os.IsExist(err) {

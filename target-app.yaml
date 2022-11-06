@@ -18,14 +18,13 @@ spec:
     spec:
       containers:
       - name: target-app-test-nc
-        image: test-nc:v2
+        image: captaingeech/test-nc:latest
         ports:
         - containerPort: 31337
-        resources:
-          limits:
-            cpu: "500m"
-            memory: "256Mi"
-        imagePullPolicy: Never
+        # resources:
+        #   limits:
+        #     cpu: "500m"
+        #     memory: "256Mi"
 ---
 apiVersion: v1
 kind: Service
@@ -38,5 +37,5 @@ spec:
     protocol: TCP
   selector:
     app: target-app-test-nc
-  type: NodePort 
+  type: LoadBalancer
  
