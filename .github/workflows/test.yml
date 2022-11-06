@@ -12,12 +12,12 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.17.x
+        go-version: 1.19.x
     
     - name: Build
       run: |
         go mod download
-        go build .
+        go build -v ./...
     
     - name: Test
       run: go test -v ./...
