@@ -27,7 +27,8 @@ import (
 )
 
 // how long an instance will run, or how much time will be added to the expiration
-const INSTANCE_RUNTIME = time.Duration(5) * time.Minute
+// TODO: configify this
+const INSTANCE_RUNTIME = time.Duration(1) * time.Hour
 
 type InstanceState int64
 
