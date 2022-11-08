@@ -10,61 +10,81 @@
         
         <title>Chal Deploy</title>
     </head>
-    <body>
+    <body class="d-flex flex-column">
         <!-- ATTENTION HACKERS: THIS IS NOT THE CHALLENGE YOU ARE LOOKING FOR -->
 
-        <div class="container">
-            <div class="col-sm mx-auto" style="margin-top: 12em">
-                <h1 style="text-align: center;">Challenge Deployment - {{ .ChallengeName }}</h1>
-            </div>
-            <div class="col-sm mx-auto" style="width: 35em; margin-top: 2em;">
-                <div class="mb-3">
-                    <label for="ta-rctf-auth-url" class="form-label">Scoreboard Team Invite URL/Token</label>
-                    <textarea class="form-control url-text-field" id="ta-rctf-auth-url" rows="4"></textarea>
+        <main class="flex-grow">
+            <div class="container">
+                <div class="col-sm mx-auto" style="margin-top: 12em">
+                    <h1 style="text-align: center;">Challenge Deployment - {{ .ChallengeName }}</h1>
                 </div>
-                <div class="mb-3">
-                    <button type="button" class="btn btn-primary disabled" style="width: 100%" id="btn-authenticate"><i class="bi-person-circle icon"></i>Authenticate</button>
-                </div>
-            </div>
-            <div class="row mx-auto row-no-gutters" style="width: 35em">
-                <div class="col-sm col-no-gutters">
-                    <div class="mb-3">
-                        <button type="button" class="btn btn-success disabled" style="width: 100%" id="btn-create-instance"><i class="bi-play-fill icon"></i>Create Instance</button>
-                    </div>
-                </div>
-                <div class="col-sm col-no-gutters">
-                    <div class="mb-3">
-                        <button type="button" class="btn btn-warning disabled" style="width: 100%" id="btn-extend-instance"><i class="bi-hourglass-split icon"></i>Extend Instance</button>
-                    </div>
-                </div>
-                <div class="col-sm col-no-gutters">
-                    <div class="mb-3">
-                        <button type="button" class="btn btn-danger disabled" style="width: 100%" id="btn-destroy-instance"><i class="bi-trash-fill icon"></i>Destroy Instance</button>
-                    </div>
-                </div>
-            </div>
-            <div class="col-sm mx-auto mt-2" style="width: 35em;">
-                <b>Auth Status:</b> <span id="span-auth-status">not authenticated</span>
-            </div>
-            <div class="col-sm mx-auto mt-2" style="width: 35em;">
-                <b>Instance Status:</b> <span id="span-instance-status">no instance created</span>
-            </div>
-        </div>
 
-        <div id="toast-container" class="position-fixed bottom-0 end-0 p-3 toast-container" style="z-index: 11">
-            <div class="toast align-items-center text-white bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true" id="notice-toast">
-                <div class="d-flex">
-                    <div class="toast-body"></div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                <div class="col-sm mx-auto" style="width: 35em; margin-top: 2em;">
+                    <div class="mb-3">
+                        <label for="ta-rctf-auth-url" class="form-label">Scoreboard Team Invite URL/Token</label>
+                        <textarea class="form-control url-text-field" id="ta-rctf-auth-url" rows="4"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-primary disabled" style="width: 100%" id="btn-authenticate"><i class="bi-person-circle icon"></i>Authenticate</button>
+                    </div>
+                </div>
+
+                <div class="row mx-auto row-no-gutters" style="width: 35em">
+                    <div class="col-sm col-no-gutters">
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-success disabled" style="width: 100%" id="btn-create-instance">
+                                <i class="bi-play-fill icon"></i>
+                                Create Instance
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-sm col-no-gutters">
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-warning disabled" style="width: 100%" id="btn-extend-instance">
+                                <i class="bi-hourglass-split icon"></i>
+                                Extend Instance
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-sm col-no-gutters">
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-danger disabled" style="width: 100%" id="btn-destroy-instance">
+                                <i class="bi-trash-fill icon"></i>
+                                Destroy Instance
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-sm mx-auto mt-2" style="width: 35em;">
+                    <b>Auth Status:</b> <span id="span-auth-status">not authenticated</span>
+                </div>
+                <div class="col-sm mx-auto mt-2" style="width: 35em;">
+                    <b>Instance Status:</b> <span id="span-instance-status">no instance created</span>
                 </div>
             </div>
-            <div class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true" id="error-toast">
-                <div class="d-flex">
-                    <div class="toast-body"></div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        
+            <div id="toast-container" class="position-fixed bottom-0 end-0 p-3 toast-container" style="z-index: 11">
+                <div class="toast align-items-center text-white bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true" id="notice-toast">
+                    <div class="d-flex">
+                        <div class="toast-body"></div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+                <div class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true" id="error-toast">
+                    <div class="d-flex">
+                        <div class="toast-body"></div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
                 </div>
             </div>
-        </div>
+        </main>
+        
+        <footer class="flex-shrink-0 mb-3">
+            <div class="container text-center">
+                <i>Having issues? Ping an admin in Discord. <a href="https://github.com/captainGeech42/chaldeploy" target="_blank">chaldeploy src</a></i>
+            </div>
+        </footer>
 
         <script src="vendor/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
 
